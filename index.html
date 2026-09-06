@@ -3,11 +3,69 @@
 <head>
 <meta charset="UTF-8">
 <title>こんにちは</title>
+<style>
+    body{
+        background-color: #071a2b;
+        color: #dcecf4;
+        text-align: center;
+    }
+canvas {
+    background-color: #0e2f45;
+}
+</style>
 </head>
 <body>
 
-<h1>こんにちは</h1>
-<p>ここからゲームを作ります</p>
+<h1>めいろゲーム</h1>
 
+<canvas id="gameCanvas" width="400" height="400"></canvas>
+<script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    const SIZE = 30;
+    const FIELD = 400;
+
+    let x = 50;
+    let y = 50;
+
+    function draw(){
+        console.log(x, y);//
+        ctx.clearRect(0, 0, 400, 400);
+        ctx.fillStyle = "#ff90a4";
+        ctx.fillRect(x, y, SIZE, SIZE);    
+    }
+
+function tryMove(dx, dy){
+    const newX = x + dx;
+    const newY = y + dy;
+
+    if(newX >= 0 && newY >= 0 && newX + SIZE <= FIELD && newY + SIZE <= FIELD){
+    x = newX;
+    y = newY;
+    }
+
+    draw();
+}
+
+draw();
+
+document.addEventListener("keydown", function(e){
+    if(e.key === "ArrowRight") {
+        tryMove(10, 0);
+    }
+    if(e.key === "ArrowLeft") {
+        tryMove(-10, 0);
+    }
+    if(e.key === "ArrowDown") {
+        tryMove(0, 10);
+    }
+    if(e.key === "ArrowUp") {
+        tryMove(0, -10);
+    }
+    draw();
+});
+
+</script>
 </body>
 </html>
