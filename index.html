@@ -2,16 +2,16 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>こんにちは</title>
+<title>めいろゲーム</title>
 <style>
-    body{
+    body {
         background-color: #071a2b;
         color: #dcecf4;
         text-align: center;
     }
-canvas {
-    background-color: #0e2f45;
-}
+    canvas {
+        background-color: #0e2f45;
+    }
 </style>
 </head>
 <body>
@@ -19,53 +19,106 @@ canvas {
 <h1>めいろゲーム</h1>
 
 <canvas id="gameCanvas" width="400" height="400"></canvas>
+
+<p>スコア： <span id="score">0</span></p>
+<p id="message"></p>
+
 <script>
     const canvas = document.getElementById("gameCanvas");
     const ctx = canvas.getContext("2d");
 
-    const SIZE = 30;
+    const CELL = 40;
+    const COLS = 10;
+    const ROWS = 10;
     const FIELD = 400;
 
-    let x = 50;
-    let y = 50;
+    const maze = [
+        [1,1,1,1,1,1,1,1,1,1],
+        [1,0,0,0,0,0,0,0,0,1],
+        [1,0,1,1,0,0,1,1,0,1],
+        [1,0,1,1,0,0,1,1,0,1],
+        [1,0,0,0,0,0,0,0,0,1],
+        [1,0,0,0,0,0,0,0,0,1],
+        [1,0,1,1,0,0,1,1,0,1],
+        [1,0,1,1,0,0,1,1,0,1],
+        [1,0,0,0,0,0,0,0,0,1],
+        [1,1,1,1,1,1,1,1,1,1]
+    ];
 
-    function draw(){
-        console.log(x, y);//
-        ctx.clearRect(0, 0, 400, 400);
+    let x = 1;
+    let y = 1;
+    let score = 0;
+    let rest = 0;
+
+    const items = [];
+    for (let row = 0; row < ROWS; row++) {
+        const line = [];
+        for (let col = 0; col < COLS; col++) {
+            if (maze[row][col] === 0) {
+                line.push(1);
+                rest = rest + 1;
+            } else {
+                line.push(0);
+            }
+        }
+        items.push(line);
+    }
+
+    items[y][x] = 0;
+    rest = rest - 1;
+
+    function draw() {
+        ctx.clearRect(0, 0, FIELD, FIELD);
+
+        for (let row = 0; row < ROWS; row++) {
+            for (let col = 0; col < COLS; col++) {
+                if (maze[row][col] === 1) {
+                    ctx.fillStyle = "#1f6f92";
+                    ctx.fillRect(col * CELL, row * CELL, CELL, CELL);
+                } else if (items[row][col] === 1) {
+                    ctx.fillStyle = "#ffeccd";
+                    ctx.beginPath();
+                    ctx.arc(col * CELL + CELL / 2, row * CELL + CELL / 2, 5, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+        }
+
         ctx.fillStyle = "#ff90a4";
-        ctx.fillRect(x, y, SIZE, SIZE);    
+        ctx.fillRect(x * CELL + 4, y * CELL + 4, CELL - 8, CELL - 8);
     }
 
-function tryMove(dx, dy){
-    const newX = x + dx;
-    const newY = y + dy;
+    function tryMove(dx, dy) {
+        const newX = x + dx;
+        const newY = y + dy;
 
-    if(newX >= 0 && newY >= 0 && newX + SIZE <= FIELD && newY + SIZE <= FIELD){
-    x = newX;
-    y = newY;
+        if (maze[newY][newX] === 0) {
+            x = newX;
+            y = newY;
+
+            if (items[y][x] === 1) {
+                items[y][x] = 0;
+                score = score + 10;
+                rest = rest - 1;
+                document.getElementById("score").textContent = score;
+
+                if (rest === 0) {
+                    document.getElementById("message").textContent = "ぜんぶ あつめた！";
+                }
+            }
+        }
+
+        draw();
     }
 
     draw();
-}
 
-draw();
-
-document.addEventListener("keydown", function(e){
-    if(e.key === "ArrowRight") {
-        tryMove(10, 0);
-    }
-    if(e.key === "ArrowLeft") {
-        tryMove(-10, 0);
-    }
-    if(e.key === "ArrowDown") {
-        tryMove(0, 10);
-    }
-    if(e.key === "ArrowUp") {
-        tryMove(0, -10);
-    }
-    draw();
-});
-
+    document.addEventListener("keydown", function (e) {
+        if (e.key === "ArrowRight") { tryMove(1, 0); }
+        if (e.key === "ArrowLeft")  { tryMove(-1, 0); }
+        if (e.key === "ArrowDown")  { tryMove(0, 1); }
+        if (e.key === "ArrowUp")    { tryMove(0, -1); }
+    });
 </script>
 </body>
 </html>
