@@ -41,13 +41,20 @@
         cursor: pointer;
         -webkit-tap-highlight-color: transparent;
     }
-    .pad {
+        .pad {
         display: grid;
         grid-template-columns: repeat(3, 76px);
-        grid-template-rows: repeat(2, 68px);
-        gap: 10px;
+        grid-template-rows: repeat(3, 64px);
+        gap: 6px;
         justify-content: center;
         margin: 16px auto 20px;
+    }
+    .pad::before {
+        content: "";
+        grid-column: 2;
+        grid-row: 2;
+        background-color: #1a5c7a;
+        border-radius: 6px;
     }
     .pad button {
         font-size: 28px;
@@ -62,8 +69,8 @@
     }
     .up    { grid-column: 2; grid-row: 1; }
     .left  { grid-column: 1; grid-row: 2; }
-    .down  { grid-column: 2; grid-row: 2; }
     .right { grid-column: 3; grid-row: 2; }
+    .down  { grid-column: 2; grid-row: 3; }
 </style>
 </head>
 <body>
