@@ -236,6 +236,39 @@
         ctx.stroke();
     }
 
+    let audio = null;
+
+    function sound(freq, sec, type) {
+        if (audio === null) {
+            audio = new AudioContext();
+        }
+        if (audio.state === "suspended") {
+            audio.resume();
+        }
+
+        const osc = audio.createOscillator();
+        const vol = audio.createGain();
+
+        osc.type = type;
+        osc.frequency.value = freq;
+        vol.gain.value = 0.15;
+
+        osc.connect(vol);
+        vol.connect(audio.destination);
+
+        osc.start();
+        vol.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + sec);
+        osc.stop(audio.currentTime + sec);
+    }
+
+    function melody(notes) {
+        for (let i = 0; i < notes.length; i++) {
+            setTimeout(function () {
+                sound(notes[i], 0.18, "square");
+            }, i * 130);
+        }
+    }
+
     function draw() {
         ctx.clearRect(0, 0, FIELD, FIELD);
 
@@ -304,6 +337,12 @@
                 score = score + 10;
                 rest = rest - 1;
                 document.getElementById("score").textContent = score;
+
+                if (score % 20 === 0) {
+                    sound(990, 0.07, "square");
+                } else {
+                    sound(780, 0.07, "square");
+                }
             }
 
             turn = turn + 1;
@@ -314,10 +353,60 @@
             if (x === ex && y === ey) {
                 gameover = true;
                 document.getElementById("message").textContent = "つかまった！";
+                sound(200, 0.5, "sawtooth");
             } else if (rest === 0) {
                 cleared = true;
                 document.getElementById("message").textContent = "ぜんぶ あつめた！";
+                melody([523, 659, 784, 1047]);
             }
+        } else {
+            sound(120, 0.08, "sawtooth");
+        }
+
+        draw();
+    }
+
+    function tryMove(dx, dy) {
+        if (gameover === true || cleared === true) {
+            return;
+        }
+
+        const newX = x + dx;
+        const newY = y + dy;
+
+        if (maze[newY][newX] === 0) {
+            x = newX;
+            y = newY;
+
+            if (items[y][x] === 1) {
+                items[y][x] = 0;
+                score = score + 10;
+                rest = rest - 1;
+                document.getElementById("score").textContent = score;
+
+                if (score % 20 === 0) {
+                    sound(990, 0.07, "square");
+                } else {
+                    sound(780, 0.07, "square");
+                }
+            }
+
+            turn = turn + 1;
+            if (turn % 2 === 0) {
+                moveEnemy();
+            }
+
+            if (x === ex && y === ey) {
+                gameover = true;
+                document.getElementById("message").textContent = "つかまった！";
+                sound(200, 0.5, "sawtooth");
+            } else if (rest === 0) {
+                cleared = true;
+                document.getElementById("message").textContent = "ぜんぶ あつめた！";
+                melody([523, 659, 784, 1047]);
+            }
+        } else {
+            sound(120, 0.08, "sawtooth");
         }
 
         draw();
