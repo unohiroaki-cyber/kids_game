@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>バモジャンプ</title>
+<style>
+    body {
+        margin: 0;
+        padding: 14px 12px 36px;
+        background-color: #16331f;
+        color: #e7f5e9;
+        text-align: center;
+        font-family: system-ui, sans-serif;
+        user-select: none;
+        -webkit-user-select: none;
+        touch-action: manipulation;
+    }
+    h1 {
+        font-size: 22px;
+        margin: 4px 0 12px;
+    }
+    canvas {
+        background-color: #7cc9ee;
+        border-radius: 10px;
+        max-width: 96vw;
+        height: auto;
+        touch-action: none;
+    }
+    button {
+        font-family: inherit;
+        font-size: 20px;
+        padding: 16px 48px;
+        margin-top: 16px;
+        border: none;
+        border-radius: 12px;
+        background-color: #8ede62;
+        color: #16331f;
+        cursor: pointer;
+        touch-action: none;
+        -webkit-tap-highlight-color: transparent;
+    }
+    button:active {
+        background-color: #c6f3a4;
+    }
+</style>
+</head>
+<body>
+
+<h1>バモジャンプ</h1>
+
+<canvas id="gameCanvas" width="480" height="270"></canvas>
+
+<div><button id="jump">ジャンプ</button></div>
+
+<script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    const W = 480;
+    const H = 270;
+    const GROUND = 210;
+    const BATTA_X = 80;
+
+    const GRAVITY = 0.55;
+    const JUMP_POWER = -11;
+    const SPEED = 3;
+
+    let battaY = GROUND;
+    let vy = 0;
+    let onGround = true;
+    let scroll = 0;
+
+    let obstacles = [];
+    let spawnTimer = 60;
+    let score = 0;
+    let gameover = false;
+    let caught = false;
+    let overTimer = 0;
+
+    let handState = "none";
+    let handTimer = 420;
+    let handPhase = 0;
+    let handY = -160;
+
+    function reset() {
+        battaY = GROUND;
+        vy = 0;
+        onGround = true;
+        scroll = 0;
+        obstacles = [];
+        spawnTimer = 60;
+        score = 0;
+        gameover = false;
+        caught = false;
+        overTimer = 0;
+        handState = "none";
+        handTimer = 420;
+        handPhase = 0;
+        handY = -160;
+    }
+
+    function jump() {
+        if (onGround === true) {
+            vy = JUMP_POWER;
+            onGround = false;
+        }
+    }
+
+    function tap() {
+        if (gameover === true) {
+            if (overTimer > 40) {
+                reset();
+            }
+            return;
+        }
+        jump();
+    }
+
+    function addObstacle() {
+        let kind = "stone";
+        let w = 26;
+        let h = 20;
+
+        if (Math.random() < 0.45) {
+            kind = "bug";
+            w = 34;
+            h = 20;
+        }
+
+        obstacles.push({ x: W + 20, w: w, h: h, kind: kind, scored: false });
+    }
+
+    function laneBusy() {
+        for (let i = 0; i < obstacles.length; i++) {
+            if (obstacles[i].x > BATTA_X - 60 && obstacles[i].x < 320) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function updateHand() {
+        if (handState === "none") {
+            handTimer = handTimer - 1;
+            if (handTimer <= 0) {
+                handState = "warn";
+                handPhase = 0;
+            }
+            return;
+        }
+
+        handPhase = handPhase + 1;
+
+        if (handState === "warn") {
+            if (handPhase > 60 && laneBusy() === false) {
+                handState = "active";
+                handPhase = 0;
+            }
+            return;
+        }
+
+        if (handPhase < 25) {
+            handY = -160 + (handPhase / 25) * 280;
+        } else if (handPhase < 62) {
+            handY = 120;
+        } else {
+            handY = 120 - ((handPhase - 62) / 28) * 280;
+        }
+
+        if (handPhase < 76 && onGround === false) {
+            caught = true;
+            gameover = true;
+            overTimer = 0;
+        }
+
+        if (handPhase > 92) {
+            handState = "none";
+            handTimer = 330 + Math.floor(Math.random() * 260);
+            handY = -160;
+        }
+    }
+
+    function update() {
+        if (gameover === true) {
+            overTimer = overTimer + 1;
+            return;
+        }
+
+        scroll = scroll + SPEED;
+
+        vy = vy + GRAVITY;
+        battaY = battaY + vy;
+
+        if (battaY > GROUND) {
+            battaY = GROUND;
+            vy = 0;
+            onGround = true;
+        }
+
+        updateHand();
+
+        if (handState === "none") {
+            spawnTimer = spawnTimer - 1;
+            if (spawnTimer <= 0) {
+                addObstacle();
+                spawnTimer = 70 + Math.floor(Math.random() * 60);
+            }
+        }
+
+        for (let i = obstacles.length - 1; i >= 0; i--) {
+            const o = obstacles[i];
+            o.x = o.x - SPEED;
+
+            if (o.scored === false && o.x + o.w < BATTA_X - 16) {
+                o.scored = true;
+                score = score + 1;
+            }
+
+            if (o.x < -60) {
+                obstacles.splice(i, 1);
+            }
+        }
+
+        const bx1 = BATTA_X - 16;
+        const bx2 = BATTA_X + 16;
+        const by1 = battaY - 26;
+        const by2 = battaY;
+
+        for (let i = 0; i < obstacles.length; i++) {
+            const o = obstacles[i];
+            const ox1 = o.x;
+            const ox2 = o.x + o.w;
+            const oy1 = GROUND - o.h;
+            const oy2 = GROUND;
+
+            if (bx1 < ox2 && bx2 > ox1 && by1 < oy2 && by2 > oy1) {
+                gameover = true;
+                caught = false;
+                overTimer = 0;
+            }
+        }
+    }
+
+    function drawCloud(x, y) {
+        ctx.fillStyle = "#ffffff";
+        ctx.beginPath();
+        ctx.arc(x, y, 14, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(x + 16, y - 7, 18, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(x + 36, y, 13, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    function drawHill(x) {
+        ctx.fillStyle = "#7cc46a";
+        ctx.beginPath();
+        ctx.arc(x, GROUND + 20, 90, Math.PI, Math.PI * 2);
+        ctx.fill();
+    }
+
+    function drawGrass(x) {
+        ctx.strokeStyle = "#3f8f2c";
+        ctx.lineWidth = 2;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(x, GROUND + 3);
+        ctx.lineTo(x - 3, GROUND - 7);
+        ctx.moveTo(x + 4, GROUND + 3);
+        ctx.lineTo(x + 5, GROUND - 9);
+        ctx.moveTo(x + 8, GROUND + 3);
+        ctx.lineTo(x + 12, GROUND - 6);
+        ctx.stroke();
+    }
+
+    function drawStone(o) {
+        ctx.fillStyle = "#98a0a6";
+        ctx.beginPath();
+        ctx.ellipse(o.x + o.w / 2, GROUND - o.h * 0.45, o.w / 2, o.h * 0.6, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#bcc3c8";
+        ctx.beginPath();
+        ctx.ellipse(o.x + o.w / 2 - 3, GROUND - o.h * 0.75, o.w / 5, o.h / 6, -0.3, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    function drawBug(o) {
+        const r = o.h / 2;
+        const cy = GROUND - r;
+        const n = 4;
+        const step = (o.w - o.h) / (n - 1);
+
+        ctx.strokeStyle = "#3a2a16";
+        ctx.lineCap = "round";
+        ctx.lineWidth = 2;
+        for (let i = 0; i < n; i++) {
+            const sx = o.x + r + i * step;
+            ctx.beginPath();
+            ctx.moveTo(sx, cy + r - 3);
+            ctx.lineTo(sx - 4, GROUND);
+            ctx.stroke();
+        }
+
+        for (let i = n - 1; i >= 0; i--) {
+            const sx = o.x + r + i * step;
+            if (i === 0) {
+                ctx.fillStyle = "#8a5a28";
+            } else {
+                ctx.fillStyle = "#6b4a22";
+            }
+            ctx.beginPath();
+            ctx.arc(sx, cy, r, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        const hx = o.x + r;
+
+        ctx.fillStyle = "#ffffff";
+        ctx.beginPath();
+        ctx.arc(hx - 3, cy - 2, 2.8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#17300f";
+        ctx.beginPath();
+        ctx.arc(hx - 4, cy - 2, 1.4, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = "#3a2a16";
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.moveTo(hx - 2, cy - r + 2);
+        ctx.lineTo(hx - 9, cy - r - 8);
+        ctx.moveTo(hx + 2, cy - r + 1);
+        ctx.lineTo(hx - 1, cy - r - 9);
+        ctx.stroke();
+    }
+
+    function drawHand(y) {
+        ctx.save();
+        ctx.translate(BATTA_X, y);
+
+        ctx.fillStyle = "#4a6fb5";
+        ctx.fillRect(-21, -230, 42, 70);
+
+        ctx.fillStyle = "#f2cba3";
+        ctx.fillRect(-16, -170, 32, 170);
+
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 24, 19, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        const fx = [-18, -9, 0, 9, 18];
+        const fl = [15, 22, 25, 21, 14];
+        for (let i = 0; i < 5; i++) {
+            ctx.beginPath();
+            ctx.ellipse(fx[i], 9 + fl[i] / 2, 5, fl[i] / 2, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        ctx.restore();
+    }
+
+    function drawBatta(px, py) {
+        ctx.save();
+        ctx.translate(px, py - 14);
+
+        ctx.strokeStyle = "#3f7a2e";
+        ctx.lineCap = "round";
+
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(-6, 2);
+        ctx.lineTo(-16, -6);
+        ctx.lineTo(-10, 14);
+        ctx.stroke();
+
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(4, 4);
+        ctx.lineTo(6, 14);
+        ctx.moveTo(10, 3);
+        ctx.lineTo(13, 14);
+        ctx.stroke();
+
+        ctx.fillStyle = "#6cc04a";
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 17, 9, -0.12, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = "#4f9b34";
+        ctx.beginPath();
+        ctx.ellipse(-3, -3, 13, 5, -0.2, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = "#7fd45c";
+        ctx.beginPath();
+        ctx.arc(16, -3, 8, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = "#ffffff";
+        ctx.beginPath();
+        ctx.arc(19, -5, 3.2, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = "#17300f";
+        ctx.beginPath();
+        ctx.arc(20, -5, 1.6, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = "#3f7a2e";
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.moveTo(21, -8);
+        ctx.lineTo(30, -17);
+        ctx.moveTo(21, -6);
+        ctx.lineTo(32, -10);
+        ctx.stroke();
+
+        ctx.restore();
+    }
+
+    function draw() {
+        const sky = ctx.createLinearGradient(0, 0, 0, GROUND);
+        sky.addColorStop(0, "#7cc9ee");
+        sky.addColorStop(1, "#d6f2e6");
+        ctx.fillStyle = sky;
+        ctx.fillRect(0, 0, W, GROUND);
+
+        const cloudOff = (scroll * 0.15) % 200;
+        for (let i = -1; i < 4; i++) {
+            drawCloud(i * 200 - cloudOff + 40, 42 + (i % 2) * 22);
+        }
+
+        const hillOff = (scroll * 0.4) % 200;
+        for (let i = -1; i < 4; i++) {
+            drawHill(i * 200 - hillOff + 70);
+        }
+
+        ctx.fillStyle = "#5fa83c";
+        ctx.fillRect(0, GROUND, W, 14);
+        ctx.fillStyle = "#7a5230";
+        ctx.fillRect(0, GROUND + 14, W, H - GROUND - 14);
+
+        const grassOff = scroll % 20;
+        for (let i = -1; i < 26; i++) {
+            drawGrass(i * 20 - grassOff);
+        }
+
+        if (handState !== "none") {
+            let a = 0.4;
+            if (handState === "warn") {
+                a = (handPhase / 60) * 0.4;
+            }
+            ctx.fillStyle = "rgba(10, 30, 15, " + a + ")";
+            ctx.beginPath();
+            ctx.ellipse(BATTA_X, GROUND + 5, 48, 11, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        for (let i = 0; i < obstacles.length; i++) {
+            if (obstacles[i].kind === "stone") {
+                drawStone(obstacles[i]);
+            } else {
+                drawBug(obstacles[i]);
+            }
+        }
+
+        drawBatta(BATTA_X, battaY);
+
+        if (handState === "active") {
+            drawHand(handY);
+        }
+
+        if (handState === "warn" && Math.floor(handPhase / 8) % 2 === 0) {
+            ctx.fillStyle = "#e23b2e";
+            ctx.font = "bold 30px system-ui, sans-serif";
+            ctx.textAlign = "center";
+            ctx.fillText("！", BATTA_X, 62);
+        }
+
+        ctx.fillStyle = "#16331f";
+        ctx.font = "bold 20px system-ui, sans-serif";
+        ctx.textAlign = "right";
+        ctx.fillText(score, W - 16, 32);
+
+        if (score === 0 && gameover === false && handState === "none") {
+            ctx.fillStyle = "rgba(20, 50, 25, 0.55)";
+            ctx.font = "14px system-ui, sans-serif";
+            ctx.textAlign = "center";
+            ctx.fillText("画面をタップ／スペースキーでジャンプ", W / 2, 24);
+        }
+
+        if (gameover === true) {
+            ctx.fillStyle = "rgba(10, 30, 15, 0.55)";
+            ctx.fillRect(0, 0, W, H);
+
+            ctx.fillStyle = "#ffffff";
+            ctx.textAlign = "center";
+            ctx.font = "bold 30px system-ui, sans-serif";
+
+            if (caught === true) {
+                ctx.fillText("つかまった！", W / 2, H / 2 - 10);
+            } else {
+                ctx.fillText("ぶつかった！", W / 2, H / 2 - 10);
+            }
+
+            ctx.font = "20px system-ui, sans-serif";
+            ctx.fillText("スコア " + score, W / 2, H / 2 + 24);
+
+            if (overTimer > 40) {
+                ctx.font = "16px system-ui, sans-serif";
+                ctx.fillText("タップでもういちど", W / 2, H / 2 + 56);
+            }
+        }
+
+        ctx.textAlign = "left";
+    }
+
+    function loop() {
+        update();
+        draw();
+        requestAnimationFrame(loop);
+    }
+
+    requestAnimationFrame(loop);
+
+    document.addEventListener("keydown", function (e) {
+        if (e.code === "Space") {
+            e.preventDefault();
+            tap();
+        }
+    });
+
+    canvas.addEventListener("pointerdown", function (e) {
+        e.preventDefault();
+        tap();
+    });
+
+    document.getElementById("jump").addEventListener("pointerdown", function (e) {
+        e.preventDefault();
+        tap();
+    });
+</script>
+
+<p><a href="index.html" style="color:#b8e89a; font-size:16px;">← ゲームをえらぶ</a></p>
+
+</body>
+</html>

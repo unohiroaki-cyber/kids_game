@@ -2,448 +2,137 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>めいろゲーム</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ゲームをえらぶ</title>
 <style>
+    * { box-sizing: border-box; }
     body {
         margin: 0;
-        padding: 14px 12px 36px;
-        background-color: #071a2b;
-        color: #dcecf4;
-        text-align: center;
+        padding: 30px 16px 48px;
+        background-color: #0b1a24;
+        background-image: radial-gradient(120% 80% at 50% 0%, #17394e 0%, #0b1a24 62%);
+        color: #e6f2f8;
         font-family: system-ui, sans-serif;
-        user-select: none;
-        -webkit-user-select: none;
-        touch-action: manipulation;
+        min-height: 100vh;
+        -webkit-text-size-adjust: 100%;
     }
+    .wrap { max-width: 720px; margin: 0 auto; }
+    header { text-align: center; margin-bottom: 26px; }
     h1 {
-        font-size: 22px;
-        margin: 4px 0 12px;
+        font-size: 34px;
+        margin: 0 0 8px;
+        letter-spacing: 0.05em;
     }
-    p {
-        margin: 10px 0;
-        font-size: 18px;
-    }
-    canvas {
-        background-color: #0e2f45;
-        border-radius: 8px;
-        max-width: 92vw;
-        height: auto;
-    }
-    button {
-        font-family: inherit;
-        font-size: 18px;
-        padding: 10px 24px;
-        border: none;
-        border-radius: 10px;
-        background-color: #4fd6d9;
-        color: #071a2b;
-        cursor: pointer;
-        -webkit-tap-highlight-color: transparent;
-    }
-        .pad {
+    .lead { margin: 0; color: #8aafc2; font-size: 15px; }
+    .grid {
         display: grid;
-        grid-template-columns: repeat(3, 76px);
-        grid-template-rows: repeat(3, 64px);
-        gap: 6px;
-        justify-content: center;
-        margin: 16px auto 20px;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 16px;
     }
-    .pad::before {
-        content: "";
-        grid-column: 2;
-        grid-row: 2;
-        background-color: #1a5c7a;
-        border-radius: 6px;
+    .card {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 18px;
+        border-radius: 18px;
+        background-color: #152c3b;
+        border: 1px solid rgba(143, 208, 232, 0.18);
+        text-decoration: none;
+        color: inherit;
+        -webkit-tap-highlight-color: transparent;
+        transition: transform 0.12s ease, background-color 0.12s ease;
     }
-    .pad button {
-        font-size: 28px;
-        padding: 0;
-        background-color: #1f6f92;
-        color: #cdeef7;
-        touch-action: none;
+    .card:active {
+        transform: scale(0.97);
+        background-color: #1e3c4f;
     }
-    .pad button:active {
-        background-color: #4fd6d9;
-        color: #071a2b;
+    .badge {
+        flex: 0 0 auto;
+        width: 68px;
+        height: 68px;
+        display: grid;
+        place-items: center;
+        border-radius: 16px;
+        background-color: rgba(255, 255, 255, 0.06);
     }
-    .up    { grid-column: 2; grid-row: 1; }
-    .left  { grid-column: 1; grid-row: 2; }
-    .right { grid-column: 3; grid-row: 2; }
-    .down  { grid-column: 2; grid-row: 3; }
+    .name {
+        font-size: 20px;
+        font-weight: 700;
+        margin: 0 0 5px;
+    }
+    .desc {
+        font-size: 13px;
+        color: #8aafc2;
+        margin: 0;
+        line-height: 1.6;
+    }
+    footer {
+        margin-top: 34px;
+        text-align: center;
+        color: #4f7488;
+        font-size: 12px;
+    }
 </style>
 </head>
 <body>
 
-<h1>めいろゲーム</h1>
+<div class="wrap">
+    <header>
+        <h1>ゲームをえらぶ</h1>
+        <p class="lead">あそびたいものを タップしてね</p>
+    </header>
 
-<canvas id="gameCanvas" width="400" height="400"></canvas>
+    <div class="grid" id="grid"></div>
 
-<p>スコア： <span id="score">0</span></p>
-<p id="message"></p>
-
-<div class="pad">
-    <button class="up" id="up">▲</button>
-    <button class="left" id="left">◀</button>
-    <button class="down" id="down">▼</button>
-    <button class="right" id="right">▶</button>
+    <footer>あたらしいゲームは ここに ふえていきます</footer>
 </div>
 
-<button id="restart">もういちど</button>
-
 <script>
-    const canvas = document.getElementById("gameCanvas");
-    const ctx = canvas.getContext("2d");
-
-    const CELL = 40;
-    const COLS = 10;
-    const ROWS = 10;
-    const FIELD = 400;
-
-    const maze = [
-        [1,1,1,1,1,1,1,1,1,1],
-        [1,0,0,0,0,0,0,0,0,1],
-        [1,0,1,1,0,0,1,1,0,1],
-        [1,0,1,1,0,0,1,1,0,1],
-        [1,0,0,0,0,0,0,0,0,1],
-        [1,0,0,0,0,0,0,0,0,1],
-        [1,0,1,1,0,0,1,1,0,1],
-        [1,0,1,1,0,0,1,1,0,1],
-        [1,0,0,0,0,0,0,0,0,1],
-        [1,1,1,1,1,1,1,1,1,1]
+    const games = [
+        {
+            file: "meiro.html",
+            name: "めいろゲーム",
+            desc: "たまを ぜんぶ あつめて、おにから にげよう",
+            color: "#5fc7f0",
+            icon: `<svg viewBox="0 0 48 48" width="40" height="40" fill="none">
+                     <rect x="5" y="5" width="38" height="38" rx="7" stroke="currentColor" stroke-width="4"/>
+                     <rect x="14" y="14" width="8" height="8" rx="2" fill="currentColor"/>
+                     <rect x="26" y="26" width="8" height="8" rx="2" fill="currentColor"/>
+                     <circle cx="31" cy="17" r="3" fill="currentColor"/>
+                     <circle cx="17" cy="31" r="3" fill="currentColor"/>
+                   </svg>`
+        },
+        {
+            file: "batta.html",
+            name: "バモジャンプ",
+            desc: "いしと むしを ジャンプで よけよう。手が きたら ジャンプきんし！",
+            color: "#8ede62",
+            icon: `<svg viewBox="0 0 48 48" width="40" height="40" fill="none">
+                     <path d="M6 38 Q17 12 29 30" stroke="currentColor" stroke-width="3"
+                           stroke-dasharray="3 6" stroke-linecap="round"/>
+                     <ellipse cx="31" cy="32" rx="11" ry="6.5" fill="currentColor"/>
+                     <circle cx="41" cy="28" r="4.5" fill="currentColor"/>
+                     <path d="M25 33 L18 26" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+                     <path d="M43 23 L47 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                   </svg>`
+        }
     ];
 
-    let x = 1;
-    let y = 1;
-    let ex = 8;
-    let ey = 8;
-    let score = 0;
-    let rest = 0;
-    let turn = 0;
-    let gameover = false;
-    let cleared = false;
+    let html = "";
 
-    const items = [];
-    for (let row = 0; row < ROWS; row++) {
-        const line = [];
-        for (let col = 0; col < COLS; col++) {
-            if (maze[row][col] === 0) {
-                line.push(1);
-                rest = rest + 1;
-            } else {
-                line.push(0);
-            }
-        }
-        items.push(line);
+    for (let i = 0; i < games.length; i++) {
+        const g = games[i];
+        html = html + `
+            <a class="card" href="${g.file}">
+                <div class="badge" style="color: ${g.color}">${g.icon}</div>
+                <div>
+                    <p class="name">${g.name}</p>
+                    <p class="desc">${g.desc}</p>
+                </div>
+            </a>`;
     }
 
-    items[y][x] = 0;
-    rest = rest - 1;
-
-    function drawFace(cx, cy, r) {
-        ctx.fillStyle = "rgba(255, 255, 255, 0.10)";
-        ctx.beginPath();
-        ctx.arc(cx, cy, r * 1.2, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = "#3b2a1e";
-        ctx.beginPath();
-        ctx.arc(cx, cy - r * 0.1, r, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = "#f7d9bd";
-        ctx.beginPath();
-        ctx.arc(cx, cy + r * 0.1, r * 0.85, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = "#3b2a1e";
-        ctx.beginPath();
-        ctx.arc(cx, cy - r * 0.05, r * 0.88, Math.PI, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = "rgba(255, 140, 140, 0.45)";
-        ctx.beginPath();
-        ctx.arc(cx - r * 0.55, cy + r * 0.42, r * 0.16, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(cx + r * 0.55, cy + r * 0.42, r * 0.16, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.strokeStyle = "#2b2118";
-        ctx.lineWidth = r * 0.13;
-        ctx.lineCap = "round";
-        ctx.beginPath();
-        ctx.arc(cx - r * 0.38, cy + r * 0.18, r * 0.2, Math.PI * 1.15, Math.PI * 1.85);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.arc(cx + r * 0.38, cy + r * 0.18, r * 0.2, Math.PI * 1.15, Math.PI * 1.85);
-        ctx.stroke();
-
-        ctx.fillStyle = "#8c3b3b";
-        ctx.beginPath();
-        ctx.arc(cx, cy + r * 0.45, r * 0.3, 0, Math.PI);
-        ctx.fill();
-
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(cx - r * 0.3, cy + r * 0.45, r * 0.6, r * 0.1);
-    }
-
-    function drawEnemy(cx, cy, r) {
-        ctx.fillStyle = "#ffd76e";
-        ctx.beginPath();
-        ctx.moveTo(cx - r * 0.55, cy - r * 0.6);
-        ctx.lineTo(cx - r * 0.35, cy - r * 1.25);
-        ctx.lineTo(cx - r * 0.1, cy - r * 0.7);
-        ctx.closePath();
-        ctx.fill();
-
-        ctx.beginPath();
-        ctx.moveTo(cx + r * 0.55, cy - r * 0.6);
-        ctx.lineTo(cx + r * 0.35, cy - r * 1.25);
-        ctx.lineTo(cx + r * 0.1, cy - r * 0.7);
-        ctx.closePath();
-        ctx.fill();
-
-        ctx.fillStyle = "#e8503a";
-        ctx.beginPath();
-        ctx.arc(cx, cy, r * 0.9, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = "#ffffff";
-        ctx.beginPath();
-        ctx.arc(cx - r * 0.33, cy - r * 0.08, r * 0.22, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(cx + r * 0.33, cy - r * 0.08, r * 0.22, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = "#2b2118";
-        ctx.beginPath();
-        ctx.arc(cx - r * 0.3, cy - r * 0.03, r * 0.1, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(cx + r * 0.3, cy - r * 0.03, r * 0.1, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.strokeStyle = "#5c1a12";
-        ctx.lineWidth = r * 0.12;
-        ctx.lineCap = "round";
-        ctx.beginPath();
-        ctx.moveTo(cx - r * 0.35, cy + r * 0.42);
-        ctx.lineTo(cx - r * 0.12, cy + r * 0.55);
-        ctx.lineTo(cx + r * 0.12, cy + r * 0.42);
-        ctx.lineTo(cx + r * 0.35, cy + r * 0.55);
-        ctx.stroke();
-    }
-
-    let audio = null;
-
-    function sound(freq, sec, type) {
-        if (audio === null) {
-            audio = new AudioContext();
-        }
-        if (audio.state === "suspended") {
-            audio.resume();
-        }
-
-        const osc = audio.createOscillator();
-        const vol = audio.createGain();
-
-        osc.type = type;
-        osc.frequency.value = freq;
-        vol.gain.value = 0.15;
-
-        osc.connect(vol);
-        vol.connect(audio.destination);
-
-        osc.start();
-        vol.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + sec);
-        osc.stop(audio.currentTime + sec);
-    }
-
-    function melody(notes) {
-        for (let i = 0; i < notes.length; i++) {
-            setTimeout(function () {
-                sound(notes[i], 0.18, "square");
-            }, i * 130);
-        }
-    }
-
-    function draw() {
-        ctx.clearRect(0, 0, FIELD, FIELD);
-
-        for (let row = 0; row < ROWS; row++) {
-            for (let col = 0; col < COLS; col++) {
-                if (maze[row][col] === 1) {
-                    ctx.fillStyle = "#1f6f92";
-                    ctx.fillRect(col * CELL, row * CELL, CELL, CELL);
-                } else if (items[row][col] === 1) {
-                    ctx.fillStyle = "#ffeccd";
-                    ctx.beginPath();
-                    ctx.arc(col * CELL + CELL / 2, row * CELL + CELL / 2, 5, 0, Math.PI * 2);
-                    ctx.fill();
-                }
-            }
-        }
-
-        drawEnemy(ex * CELL + CELL / 2, ey * CELL + CELL / 2, CELL * 0.38);
-        drawFace(x * CELL + CELL / 2, y * CELL + CELL / 2, CELL * 0.42);
-    }
-
-    function moveEnemy() {
-        let dx = 0;
-        let dy = 0;
-
-        if (x > ex) { dx = 1; }
-        if (x < ex) { dx = -1; }
-        if (y > ey) { dy = 1; }
-        if (y < ey) { dy = -1; }
-
-        if (Math.abs(x - ex) >= Math.abs(y - ey)) {
-            if (dx !== 0 && maze[ey][ex + dx] === 0) {
-                ex = ex + dx;
-                return;
-            }
-            if (dy !== 0 && maze[ey + dy][ex] === 0) {
-                ey = ey + dy;
-                return;
-            }
-        } else {
-            if (dy !== 0 && maze[ey + dy][ex] === 0) {
-                ey = ey + dy;
-                return;
-            }
-            if (dx !== 0 && maze[ey][ex + dx] === 0) {
-                ex = ex + dx;
-                return;
-            }
-        }
-    }
-
-    function tryMove(dx, dy) {
-        if (gameover === true || cleared === true) {
-            return;
-        }
-
-        const newX = x + dx;
-        const newY = y + dy;
-
-        if (maze[newY][newX] === 0) {
-            x = newX;
-            y = newY;
-
-            if (items[y][x] === 1) {
-                items[y][x] = 0;
-                score = score + 10;
-                rest = rest - 1;
-                document.getElementById("score").textContent = score;
-
-                if (score % 20 === 0) {
-                    sound(990, 0.07, "square");
-                } else {
-                    sound(780, 0.07, "square");
-                }
-            }
-
-            turn = turn + 1;
-            if (turn % 2 === 0) {
-                moveEnemy();
-            }
-
-            if (x === ex && y === ey) {
-                gameover = true;
-                document.getElementById("message").textContent = "つかまった！";
-                sound(200, 0.5, "sawtooth");
-            } else if (rest === 0) {
-                cleared = true;
-                document.getElementById("message").textContent = "ぜんぶ あつめた！";
-                melody([523, 659, 784, 1047]);
-            }
-        } else {
-            sound(120, 0.08, "sawtooth");
-        }
-
-        draw();
-    }
-
-    function tryMove(dx, dy) {
-        if (gameover === true || cleared === true) {
-            return;
-        }
-
-        const newX = x + dx;
-        const newY = y + dy;
-
-        if (maze[newY][newX] === 0) {
-            x = newX;
-            y = newY;
-
-            if (items[y][x] === 1) {
-                items[y][x] = 0;
-                score = score + 10;
-                rest = rest - 1;
-                document.getElementById("score").textContent = score;
-
-                if (score % 20 === 0) {
-                    sound(990, 0.07, "square");
-                } else {
-                    sound(780, 0.07, "square");
-                }
-            }
-
-            turn = turn + 1;
-            if (turn % 2 === 0) {
-                moveEnemy();
-            }
-
-            if (x === ex && y === ey) {
-                gameover = true;
-                document.getElementById("message").textContent = "つかまった！";
-                sound(200, 0.5, "sawtooth");
-            } else if (rest === 0) {
-                cleared = true;
-                document.getElementById("message").textContent = "ぜんぶ あつめた！";
-                melody([523, 659, 784, 1047]);
-            }
-        } else {
-            sound(120, 0.08, "sawtooth");
-        }
-
-        draw();
-    }
-
-    draw();
-
-    document.addEventListener("keydown", function (e) {
-        if (e.key === "ArrowRight") { tryMove(1, 0); }
-        if (e.key === "ArrowLeft")  { tryMove(-1, 0); }
-        if (e.key === "ArrowDown")  { tryMove(0, 1); }
-        if (e.key === "ArrowUp")    { tryMove(0, -1); }
-    });
-
-    document.getElementById("up").addEventListener("pointerdown", function (e) {
-        e.preventDefault();
-        tryMove(0, -1);
-    });
-
-    document.getElementById("down").addEventListener("pointerdown", function (e) {
-        e.preventDefault();
-        tryMove(0, 1);
-    });
-
-    document.getElementById("left").addEventListener("pointerdown", function (e) {
-        e.preventDefault();
-        tryMove(-1, 0);
-    });
-
-    document.getElementById("right").addEventListener("pointerdown", function (e) {
-        e.preventDefault();
-        tryMove(1, 0);
-    });
-
-    document.getElementById("restart").addEventListener("click", function () {
-        location.reload();
-    });
+    document.getElementById("grid").innerHTML = html;
 </script>
 </body>
 </html>
