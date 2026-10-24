@@ -1,0 +1,1212 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>豊臣 vs 徳川</title>
+<style>
+    body {
+        margin: 0;
+        padding: 14px 12px 36px;
+        background-color: #231a12;
+        color: #f2e7d5;
+        text-align: center;
+        font-family: system-ui, sans-serif;
+        user-select: none;
+        -webkit-user-select: none;
+        touch-action: manipulation;
+    }
+    h1 {
+        font-size: 22px;
+        margin: 4px 0 12px;
+        letter-spacing: 0.06em;
+    }
+    canvas {
+        background-color: #bfe3f2;
+        border-radius: 10px;
+        max-width: 96vw;
+        height: auto;
+        touch-action: none;
+    }
+    .purse {
+        display: flex;
+        justify-content: center;
+        gap: 22px;
+        margin: 14px 0 4px;
+        font-size: 19px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+    }
+    .purse .gold { color: #ffd77a; }
+    .purse .coin { color: #9fe0b0; }
+    .purse small { font-size: 12px; font-weight: 500; opacity: 0.75; display: block; }
+
+    .row {
+        display: flex;
+        justify-content: center;
+        gap: 9px;
+        flex-wrap: wrap;
+        margin-top: 10px;
+    }
+    .troop, .shop {
+        font-family: inherit;
+        padding: 11px 9px;
+        border: 2px solid #6b5533;
+        border-radius: 12px;
+        background-color: #3a2b1a;
+        color: #f2e7d5;
+        cursor: pointer;
+        touch-action: none;
+        -webkit-tap-highlight-color: transparent;
+        line-height: 1.45;
+    }
+    .troop { min-width: 108px; }
+    .shop {
+        min-width: 132px;
+        border-color: #3f6b48;
+        background-color: #1e3324;
+    }
+    .troop b, .shop b { font-size: 16px; }
+    .troop span, .shop span { font-size: 11px; color: #c9b48c; display: block; }
+    .shop span { color: #9bc4a6; }
+    .troop:active { background-color: #5a4426; }
+    .shop:active { background-color: #2d4a34; }
+    .off { opacity: 0.38; }
+    .hide { display: none; }
+
+    .restart {
+        font-family: inherit;
+        font-size: 16px;
+        padding: 10px 28px;
+        margin-top: 18px;
+        border: none;
+        border-radius: 10px;
+        background-color: #d8b25a;
+        color: #231a12;
+        cursor: pointer;
+    }
+    a { color: #e7c98a; font-size: 16px; }
+</style>
+</head>
+<body>
+
+<h1>豊臣 vs 徳川</h1>
+
+<canvas id="gameCanvas" width="640" height="300"></canvas>
+
+<div class="purse">
+    <div class="gold"><span id="money">0</span><small>軍資金（時間でたまる）</small></div>
+    <div class="coin"><span id="coins">0</span><small>小判（敵を倒すと）</small></div>
+</div>
+
+<div class="row" id="troops"></div>
+<div class="row" id="shop"></div>
+
+<div><button class="restart" id="restart">はじめから</button></div>
+
+<p><a href="index.html">← ゲームをえらぶ</a></p>
+
+<script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    const W = 640;
+    const H = 300;
+    const GROUND = 240;
+    const FIELD_FAR = 214;
+    const TOYO_LINE = 84;
+    const TOKU_LINE = 556;
+    const TOYO_MAX = 900;
+    const TOKU_MAX = 1300;
+
+    const INCOME_BASE = 0.2;
+    const INCOME_STEP = 0.05;
+    const INCOME_MAX_LV = 5;
+    const CPU_INCOME = 0.16;
+
+    const CASTLE_ATK = 18;
+    const CASTLE_RATE = 30;
+    const CASTLE_REACH = 52;
+    const SIEGE_RANGE = 36;
+
+    const DEPLOY_COOL = 30;
+    const SPACING = 4;
+    const MAX_PER_SIDE = 20;
+
+    const UNITS = [
+        {
+            name: "足軽",
+            note: "やすい ばんのう",
+            cost: 30,
+            unlock: 0,
+            coin: 3,
+            hp: 100,
+            atk: 9,
+            touch: 13,
+            reach: 34,
+            speed: 0.55,
+            rate: 34
+        },
+        {
+            name: "鉄砲兵",
+            note: "とおくから うつ よわい",
+            cost: 60,
+            unlock: 25,
+            coin: 5,
+            hp: 70,
+            atk: 40,
+            touch: 95,
+            reach: 100,
+            speed: 0.4,
+            rate: 80
+        },
+        {
+            name: "騎馬兵",
+            note: "かたい はやい",
+            cost: 90,
+            unlock: 50,
+            coin: 8,
+            hp: 320,
+            atk: 18,
+            touch: 15,
+            reach: 30,
+            speed: 1.05,
+            rate: 28
+        }
+    ];
+
+    let units = [];
+    let shots = [];
+    let money = 50;
+    let coins = 0;
+    let unlocked = [true, false, false];
+    let incomeLv = 0;
+    let cpuMoney = 50;
+    let cpuDelay = 150;
+    let cpuTarget = -1;
+    let deployCool = 0;
+    let toyoHp = TOYO_MAX;
+    let tokuHp = TOKU_MAX;
+    let toyoCool = 0;
+    let tokuCool = 0;
+    let state = "play";
+    let tick = 0;
+
+    function income() {
+        return INCOME_BASE + incomeLv * INCOME_STEP;
+    }
+
+    function incomeCost() {
+        return 30 + incomeLv * 25;
+    }
+
+
+    function reset() {
+        units = [];
+        shots = [];
+        money = 50;
+        coins = 0;
+        unlocked = [true, false, false];
+        incomeLv = 0;
+        cpuMoney = 50;
+        cpuDelay = 150;
+        cpuTarget = -1;
+        deployCool = 0;
+        toyoHp = TOYO_MAX;
+        tokuHp = TOKU_MAX;
+        toyoCool = 0;
+        tokuCool = 0;
+        state = "play";
+        tick = 0;
+    }
+
+    function countSide(side) {
+        let n = 0;
+        for (let i = 0; i < units.length; i++) {
+            if (units[i].side === side) {
+                n = n + 1;
+            }
+        }
+        return n;
+    }
+
+    function spawn(side, typeIndex) {
+        const t = UNITS[typeIndex];
+        const dir = (side === "toyotomi") ? 1 : -1;
+        const x = (side === "toyotomi") ? TOYO_LINE + 8 : TOKU_LINE - 8;
+
+        units.push({
+            side: side,
+            type: typeIndex,
+            dir: dir,
+            x: x,
+            hp: t.hp,
+            maxHp: t.hp,
+            atk: t.atk,
+            touch: t.touch,
+            reach: t.reach,
+            speed: t.speed,
+            rate: t.rate,
+            cool: 0,
+            swing: 0,
+            lane: Math.floor(Math.random() * 23),
+            step: Math.random() * 6.28
+        });
+    }
+
+    function buy(typeIndex) {
+        if (state !== "play" || unlocked[typeIndex] === false) {
+            return;
+        }
+        if (countSide("toyotomi") >= MAX_PER_SIDE || deployCool > 0) {
+            return;
+        }
+        if (money >= UNITS[typeIndex].cost) {
+            money = money - UNITS[typeIndex].cost;
+            spawn("toyotomi", typeIndex);
+            deployCool = DEPLOY_COOL;
+        }
+    }
+
+    function unlock(typeIndex) {
+        if (state !== "play" || unlocked[typeIndex] === true) {
+            return;
+        }
+        if (coins >= UNITS[typeIndex].unlock) {
+            coins = coins - UNITS[typeIndex].unlock;
+            unlocked[typeIndex] = true;
+        }
+    }
+
+    function upgradeIncome() {
+        if (state !== "play" || incomeLv >= INCOME_MAX_LV) {
+            return;
+        }
+        if (coins >= incomeCost()) {
+            coins = coins - incomeCost();
+            incomeLv = incomeLv + 1;
+        }
+    }
+
+    function nearestTo(lineX, side, dir) {
+        let best = null;
+        let bestD = 99999;
+        for (let i = 0; i < units.length; i++) {
+            const o = units[i];
+            if (o.side !== side) {
+                continue;
+            }
+            const d = (o.x - lineX) * dir;
+            if (d >= -10 && d < bestD) {
+                bestD = d;
+                best = o;
+            }
+        }
+        if (best !== null && bestD <= CASTLE_REACH) {
+            return best;
+        }
+        return null;
+    }
+
+    function findEnemy(u) {
+        let best = null;
+        let bestD = 99999;
+        for (let j = 0; j < units.length; j++) {
+            const o = units[j];
+            if (o.side === u.side) {
+                continue;
+            }
+            const d = (o.x - u.x) * u.dir;
+            if (d >= -8 && d < bestD) {
+                bestD = d;
+                best = o;
+            }
+        }
+        if (best === null) {
+            return null;
+        }
+        return { unit: best, dist: bestD };
+    }
+
+
+    function addShot(u, toX) {
+        shots.push({
+            x: u.x + u.dir * 14,
+            y: GROUND - u.lane - 19,
+            toX: toX,
+            dir: u.dir,
+            life: 12,
+            side: u.side
+        });
+    }
+
+    function playerFrontX() {
+        let m = TOYO_LINE;
+        for (let i = 0; i < units.length; i++) {
+            if (units[i].side === "toyotomi" && units[i].x > m) {
+                m = units[i].x;
+            }
+        }
+        return m;
+    }
+
+    function countType(side, type) {
+        let n = 0;
+        for (let i = 0; i < units.length; i++) {
+            if (units[i].side === side && units[i].type === type) {
+                n = n + 1;
+            }
+        }
+        return n;
+    }
+
+    function cpuChooseTarget() {
+        const canTeppou = tick > 60 * 25;
+        const canKiba = tick > 60 * 55;
+
+        if (playerFrontX() > 420 && Math.random() < 0.75) {
+            return 0;
+        }
+
+        if (canKiba && countType("toyotomi", 1) >= 2 && Math.random() < 0.6) {
+            return 2;
+        }
+
+        if (canTeppou && countType("tokugawa", 1) < 2 && Math.random() < 0.55) {
+            return 1;
+        }
+
+        const r = Math.random();
+        if (canKiba) {
+            if (r < 0.42) {
+                return 0;
+            }
+            if (r < 0.74) {
+                return 1;
+            }
+            return 2;
+        }
+        if (canTeppou) {
+            if (r < 0.58) {
+                return 0;
+            }
+            return 1;
+        }
+        return 0;
+    }
+
+    function update() {
+        if (state !== "play") {
+            return;
+        }
+
+        tick = tick + 1;
+
+        if (deployCool > 0) {
+            deployCool = deployCool - 1;
+        }
+
+        money = money + income();
+        cpuMoney = cpuMoney + CPU_INCOME;
+
+        cpuDelay = cpuDelay - 1;
+        if (cpuDelay <= 0 && countSide("tokugawa") < MAX_PER_SIDE) {
+            if (cpuTarget < 0) {
+                cpuTarget = cpuChooseTarget();
+            }
+            if (cpuTarget > 0 && playerFrontX() > 465) {
+                cpuTarget = 0;
+            }
+            if (cpuMoney >= UNITS[cpuTarget].cost) {
+                cpuMoney = cpuMoney - UNITS[cpuTarget].cost;
+                spawn("tokugawa", cpuTarget);
+                cpuTarget = -1;
+                cpuDelay = 70 + Math.floor(Math.random() * 70);
+            }
+        }
+
+        for (let i = 0; i < units.length; i++) {
+            const u = units[i];
+
+            if (u.cool > 0) {
+                u.cool = u.cool - 1;
+            }
+            if (u.swing > 0) {
+                u.swing = u.swing - 1;
+            }
+
+            let canMove = true;
+            let acted = false;
+
+            const found = findEnemy(u);
+
+            if (found !== null && found.dist <= u.reach) {
+                if (u.cool <= 0) {
+                    found.unit.hp = found.unit.hp - u.atk;
+                    u.cool = u.rate;
+                    u.swing = 9;
+                    acted = true;
+                    if (u.type === 1) {
+                        addShot(u, found.unit.x);
+                    }
+                }
+                if (found.dist <= u.touch) {
+                    canMove = false;
+                }
+            }
+
+            if (acted === false) {
+                let baseDist = 0;
+                if (u.side === "toyotomi") {
+                    baseDist = TOKU_LINE - u.x;
+                } else {
+                    baseDist = u.x - TOYO_LINE;
+                }
+
+                if (baseDist <= SIEGE_RANGE) {
+                    canMove = false;
+                    if (u.cool <= 0) {
+                        if (u.side === "toyotomi") {
+                            tokuHp = tokuHp - u.atk;
+                        } else {
+                            toyoHp = toyoHp - u.atk;
+                        }
+                        u.cool = u.rate;
+                        u.swing = 9;
+                        if (u.type === 1) {
+                            addShot(u, u.x + u.dir * 30);
+                        }
+                    }
+                }
+            }
+
+            if (canMove === true) {
+                u.x = u.x + u.speed * u.dir;
+                u.step = u.step + 0.14 * (u.type === 2 ? 1.6 : 1);
+            }
+        }
+
+        toyoCool = toyoCool - 1;
+        if (toyoCool <= 0) {
+            const t = nearestTo(TOYO_LINE, "tokugawa", 1);
+            if (t !== null) {
+                t.hp = t.hp - CASTLE_ATK;
+                toyoCool = CASTLE_RATE;
+            }
+        }
+
+        tokuCool = tokuCool - 1;
+        if (tokuCool <= 0) {
+            const t = nearestTo(TOKU_LINE, "toyotomi", -1);
+            if (t !== null) {
+                t.hp = t.hp - CASTLE_ATK;
+                tokuCool = CASTLE_RATE;
+            }
+        }
+
+        for (let i = units.length - 1; i >= 0; i--) {
+            if (units[i].hp <= 0) {
+                if (units[i].side === "tokugawa") {
+                    coins = coins + UNITS[units[i].type].coin;
+                }
+                units.splice(i, 1);
+            }
+        }
+
+        for (let i = shots.length - 1; i >= 0; i--) {
+            shots[i].life = shots[i].life - 1;
+            if (shots[i].life <= 0) {
+                shots.splice(i, 1);
+            }
+        }
+
+        if (tokuHp <= 0) {
+            tokuHp = 0;
+            state = "win";
+        } else if (toyoHp <= 0) {
+            toyoHp = 0;
+            state = "lose";
+        }
+    }
+
+    function drawSky() {
+        const sky = ctx.createLinearGradient(0, 0, 0, FIELD_FAR);
+        sky.addColorStop(0, "#9ad4ee");
+        sky.addColorStop(1, "#e4f1e2");
+        ctx.fillStyle = sky;
+        ctx.fillRect(0, 0, W, FIELD_FAR);
+
+        ctx.fillStyle = "#a8bfa0";
+        for (let i = 0; i < 4; i++) {
+            ctx.beginPath();
+            ctx.moveTo(i * 190 - 60, FIELD_FAR);
+            ctx.lineTo(i * 190 + 50, FIELD_FAR - 70);
+            ctx.lineTo(i * 190 + 150, FIELD_FAR);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        const field = ctx.createLinearGradient(0, FIELD_FAR, 0, GROUND + 18);
+        field.addColorStop(0, "#8fbd74");
+        field.addColorStop(0.55, "#71a855");
+        field.addColorStop(1, "#5d9345");
+        ctx.fillStyle = field;
+        ctx.fillRect(0, FIELD_FAR, W, GROUND + 18 - FIELD_FAR);
+
+        ctx.strokeStyle = "rgba(60, 95, 50, 0.35)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, FIELD_FAR + 0.5);
+        ctx.lineTo(W, FIELD_FAR + 0.5);
+        ctx.stroke();
+
+        ctx.strokeStyle = "rgba(45, 85, 38, 0.30)";
+        for (let i = 0; i < 90; i++) {
+            const gx = (i * 97) % W + ((i % 3) * 7);
+            const gy = FIELD_FAR + 4 + ((i * 53) % (GROUND + 12 - FIELD_FAR));
+            ctx.lineWidth = 1.2;
+            ctx.beginPath();
+            ctx.moveTo(gx, gy);
+            ctx.lineTo(gx - 2, gy - 4);
+            ctx.stroke();
+        }
+
+        ctx.fillStyle = "#6b4f33";
+        ctx.fillRect(0, GROUND + 18, W, H - GROUND - 18);
+    }
+
+    function drawKiri(cx, cy, r, color) {
+        ctx.fillStyle = color;
+
+        const leaf = [[-0.60, 0.44, 0.38, -0.5], [0, 0.58, 0.44, 0], [0.60, 0.44, 0.38, 0.5]];
+        for (let i = 0; i < 3; i++) {
+            ctx.save();
+            ctx.translate(cx + leaf[i][0] * r, cy + leaf[i][1] * r);
+            ctx.rotate(leaf[i][3]);
+            const w = leaf[i][2] * r;
+            ctx.beginPath();
+            ctx.moveTo(0, w * 0.95);
+            ctx.quadraticCurveTo(-w * 1.05, w * 0.1, 0, -w);
+            ctx.quadraticCurveTo(w * 1.05, w * 0.1, 0, w * 0.95);
+            ctx.fill();
+            ctx.restore();
+        }
+
+        const stems = [[-0.46, 5, -0.30], [0, 7, 0], [0.46, 5, 0.30]];
+        for (let i = 0; i < 3; i++) {
+            const n = stems[i][1];
+            const tall = (n === 7) ? 1.05 : 0.8;
+            for (let k = 0; k < n; k++) {
+                const t = k / (n - 1);
+                ctx.beginPath();
+                ctx.arc(cx + stems[i][0] * r + stems[i][2] * r * t,
+                        cy - 0.04 * r - t * r * tall,
+                        r * 0.1, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+    }
+
+    function drawAoi(cx, cy, r, color) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = r * 0.15;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r * 0.97, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.fillStyle = color;
+        for (let i = 0; i < 3; i++) {
+            const a = -Math.PI / 2 + i * (Math.PI * 2 / 3);
+            ctx.save();
+            ctx.translate(cx + Math.cos(a) * r * 0.40, cy + Math.sin(a) * r * 0.40);
+            ctx.rotate(a + Math.PI / 2);
+            ctx.beginPath();
+            ctx.moveTo(0, r * 0.42);
+            ctx.quadraticCurveTo(-r * 0.44, r * 0.10, -r * 0.30, -r * 0.26);
+            ctx.quadraticCurveTo(-r * 0.13, -r * 0.46, 0, -r * 0.18);
+            ctx.quadraticCurveTo(r * 0.13, -r * 0.46, r * 0.30, -r * 0.26);
+            ctx.quadraticCurveTo(r * 0.44, r * 0.10, 0, r * 0.42);
+            ctx.fill();
+            ctx.restore();
+        }
+
+        ctx.beginPath();
+        ctx.arc(cx, cy, r * 0.13, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    function drawRoof(cx, y, halfW, h, dark, light) {
+        ctx.fillStyle = dark;
+        ctx.beginPath();
+        ctx.moveTo(cx - halfW, y - 2.5);
+        ctx.quadraticCurveTo(cx - halfW * 0.5, y - h * 0.85, cx, y - h);
+        ctx.quadraticCurveTo(cx + halfW * 0.5, y - h * 0.85, cx + halfW, y - 2.5);
+        ctx.quadraticCurveTo(cx + halfW * 0.45, y + 3, cx, y + 2.2);
+        ctx.quadraticCurveTo(cx - halfW * 0.45, y + 3, cx - halfW, y - 2.5);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = light;
+        ctx.fillRect(cx - halfW * 0.46, y - h - 1.6, halfW * 0.92, 3);
+    }
+
+    function drawShachi(x, y, color, dir) {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.scale(dir, 1);
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.quadraticCurveTo(-1, -5, 2.5, -7.5);
+        ctx.quadraticCurveTo(6, -9.5, 4.5, -5);
+        ctx.quadraticCurveTo(3.5, -1.5, 0, 0);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(2.5, -7.5);
+        ctx.lineTo(6, -11);
+        ctx.lineTo(6.5, -6.5);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+    }
+
+    function drawNobori(px, w, dir, cloth, crest, crestColor) {
+        const topY = GROUND - 158;
+        const hgt = 74;
+        const x0 = (dir > 0) ? px : px - w;
+
+        ctx.strokeStyle = "#54432b";
+        ctx.lineWidth = 2.6;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(px, GROUND + 2);
+        ctx.lineTo(px, topY - 10);
+        ctx.stroke();
+
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        ctx.moveTo(px - dir * 2, topY - 4);
+        ctx.lineTo(px + dir * (w + 3), topY - 4);
+        ctx.stroke();
+
+        ctx.fillStyle = cloth;
+        ctx.fillRect(x0, topY, w, hgt);
+        ctx.fillStyle = "rgba(255,255,255,0.14)";
+        ctx.fillRect(x0, topY, w, 5);
+        ctx.strokeStyle = "rgba(0,0,0,0.3)";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x0 + 0.5, topY + 0.5, w - 1, hgt - 1);
+
+        const ccx = x0 + w / 2;
+        if (crest === "kiri") {
+            drawKiri(ccx, topY + hgt * 0.40, w * 0.36, crestColor);
+        } else {
+            drawAoi(ccx, topY + hgt * 0.38, w * 0.38, crestColor);
+        }
+    }
+
+    function drawCastle(side) {
+        const left = (side === "toyotomi");
+        const bx = left ? 10 : 566;
+        const cx = bx + 34;
+
+        const wall = left ? "#f6ecd6" : "#eef2f7";
+        const shade = left ? "#ded0b2" : "#d6dde7";
+        const roof = left ? "#7a6224" : "#2e3e5c";
+        const roofLit = left ? "#a88b36" : "#4a5f88";
+        const gold = left ? "#e7c35a" : "#b9c6dd";
+
+        const stone = ctx.createLinearGradient(0, GROUND - 44, 0, GROUND + 2);
+        stone.addColorStop(0, "#9c958a");
+        stone.addColorStop(1, "#78716a");
+        ctx.fillStyle = stone;
+        ctx.beginPath();
+        ctx.moveTo(bx - 6, GROUND + 2);
+        ctx.quadraticCurveTo(bx + 4, GROUND - 24, bx + 11, GROUND - 44);
+        ctx.lineTo(bx + 57, GROUND - 44);
+        ctx.quadraticCurveTo(bx + 64, GROUND - 24, bx + 74, GROUND + 2);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.strokeStyle = "rgba(60,56,50,0.35)";
+        ctx.lineWidth = 1;
+        for (let i = 1; i <= 3; i++) {
+            const yy = GROUND + 2 - i * 11;
+            const inset = i * 2.4;
+            ctx.beginPath();
+            ctx.moveTo(bx - 6 + inset, yy);
+            ctx.lineTo(bx + 74 - inset, yy);
+            ctx.stroke();
+        }
+        for (let i = 0; i < 7; i++) {
+            const yy = GROUND + 2 - ((i % 3) + 1) * 11 + 5.5;
+            const xx = bx + 2 + i * 10 + ((i % 2) * 5);
+            ctx.beginPath();
+            ctx.moveTo(xx, yy - 5.5);
+            ctx.lineTo(xx, yy + 5.5);
+            ctx.stroke();
+        }
+
+        ctx.fillStyle = wall;
+        ctx.fillRect(cx - 27, GROUND - 78, 54, 36);
+        ctx.fillStyle = shade;
+        ctx.fillRect(cx - 27, GROUND - 48, 54, 6);
+        ctx.fillStyle = roof;
+        for (let i = -1; i <= 1; i++) {
+            ctx.fillRect(cx + i * 15 - 4.5, GROUND - 72, 9, 10);
+        }
+        ctx.fillStyle = wall;
+        for (let i = -1; i <= 1; i++) {
+            ctx.fillRect(cx + i * 15 - 1, GROUND - 72, 2, 10);
+            ctx.fillRect(cx + i * 15 - 4.5, GROUND - 68, 9, 1.6);
+        }
+        drawRoof(cx, GROUND - 78, 36, 15, roof, roofLit);
+
+        ctx.fillStyle = wall;
+        ctx.beginPath();
+        ctx.moveTo(cx - 11, GROUND - 80);
+        ctx.lineTo(cx, GROUND - 93);
+        ctx.lineTo(cx + 11, GROUND - 80);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = gold;
+        ctx.beginPath();
+        ctx.arc(cx, GROUND - 84, 2.4, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = wall;
+        ctx.fillRect(cx - 18, GROUND - 120, 36, 28);
+        ctx.fillStyle = shade;
+        ctx.fillRect(cx - 18, GROUND - 96, 36, 4);
+        ctx.fillStyle = roof;
+        for (let i = -1; i <= 1; i += 2) {
+            ctx.fillRect(cx + i * 9 - 4, GROUND - 114, 8, 9);
+        }
+        ctx.fillStyle = wall;
+        for (let i = -1; i <= 1; i += 2) {
+            ctx.fillRect(cx + i * 9 - 1, GROUND - 114, 2, 9);
+        }
+        drawRoof(cx, GROUND - 120, 26, 13, roof, roofLit);
+
+        ctx.fillStyle = wall;
+        ctx.fillRect(cx - 11, GROUND - 146, 22, 24);
+        ctx.fillStyle = gold;
+        ctx.fillRect(cx - 13, GROUND - 126, 26, 2.4);
+        ctx.fillStyle = roof;
+        ctx.fillRect(cx - 5, GROUND - 142, 10, 11);
+        ctx.fillStyle = wall;
+        ctx.fillRect(cx - 1, GROUND - 142, 2, 11);
+        drawRoof(cx, GROUND - 146, 19, 13, roof, roofLit);
+
+        drawShachi(cx - 15, GROUND - 158, gold, 1);
+        drawShachi(cx + 15, GROUND - 158, gold, -1);
+
+        if (left) {
+            drawNobori(bx - 4, 30, 1, "#b8311d", "kiri", "#fff3cf");
+            drawNobori(bx + 78, 30, 1, "#b8311d", "kiri", "#fff3cf");
+        } else {
+            drawNobori(bx + 72, 30, -1, "#1d2f5e", "aoi", "#e9eefa");
+            drawNobori(bx - 10, 30, -1, "#1d2f5e", "aoi", "#e9eefa");
+        }
+    }
+
+    function drawAshigaru(body, dark, sw) {
+        ctx.strokeStyle = "#8a6a3a";
+        ctx.lineWidth = 1.8;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(3, -3 + sw);
+        ctx.lineTo(13, -21 + sw);
+        ctx.stroke();
+
+        ctx.fillStyle = "#d8dee4";
+        ctx.beginPath();
+        ctx.moveTo(13, -21 + sw);
+        ctx.lineTo(17, -27 + sw);
+        ctx.lineTo(11, -24 + sw);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.strokeStyle = dark;
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        ctx.moveTo(-2, -4);
+        ctx.lineTo(-4, 0);
+        ctx.moveTo(2, -4);
+        ctx.lineTo(4, 0);
+        ctx.stroke();
+
+        ctx.fillStyle = body;
+        ctx.fillRect(-4.5, -15, 9.5, 12);
+        ctx.fillStyle = dark;
+        ctx.fillRect(-4.5, -9, 9.5, 2);
+
+        ctx.fillStyle = "#f0d2ae";
+        ctx.beginPath();
+        ctx.arc(0.5, -18, 3.6, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = dark;
+        ctx.beginPath();
+        ctx.moveTo(-6.5, -19);
+        ctx.lineTo(0.5, -25.5);
+        ctx.lineTo(7.5, -19);
+        ctx.closePath();
+        ctx.fill();
+    }
+
+    function drawTeppou(body, dark, firing) {
+        ctx.strokeStyle = dark;
+        ctx.lineWidth = 2.2;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(-2, -4);
+        ctx.lineTo(-4, 0);
+        ctx.moveTo(2, -4);
+        ctx.lineTo(4, 0);
+        ctx.stroke();
+
+        ctx.fillStyle = body;
+        ctx.fillRect(-4.5, -15, 9.5, 12);
+        ctx.fillStyle = dark;
+        ctx.fillRect(-4.5, -9, 9.5, 2);
+
+        ctx.fillStyle = "#f0d2ae";
+        ctx.beginPath();
+        ctx.arc(0.5, -18, 3.6, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = dark;
+        ctx.fillRect(-7, -21.5, 14, 2.6);
+        ctx.beginPath();
+        ctx.ellipse(0.5, -21.5, 5.5, 2.4, 0, Math.PI, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = "#4a3b26";
+        ctx.lineWidth = 2.4;
+        ctx.beginPath();
+        ctx.moveTo(-5, -9);
+        ctx.lineTo(15, -13);
+        ctx.stroke();
+
+        if (firing === true) {
+            ctx.fillStyle = "#ffe08a";
+            ctx.beginPath();
+            ctx.arc(18, -13.5, 4.2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = "rgba(255,255,255,0.7)";
+            ctx.beginPath();
+            ctx.arc(23, -14, 3, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+
+    function drawKiba(body, dark, sw, step) {
+        const kick = Math.sin(step) * 3;
+
+        ctx.strokeStyle = "#4a3220";
+        ctx.lineWidth = 2.8;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(-9, -12);
+        ctx.lineTo(-11 - kick, 0);
+        ctx.moveTo(-4, -12);
+        ctx.lineTo(-2 + kick, 0);
+        ctx.moveTo(6, -12);
+        ctx.lineTo(4 - kick, 0);
+        ctx.moveTo(11, -12);
+        ctx.lineTo(13 + kick, 0);
+        ctx.stroke();
+
+        ctx.fillStyle = "#6b4a30";
+        ctx.beginPath();
+        ctx.ellipse(1, -15, 15, 8, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.moveTo(12, -19);
+        ctx.lineTo(19, -31);
+        ctx.lineTo(24, -28);
+        ctx.lineTo(16, -14);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.ellipse(23, -31, 5.4, 3.4, -0.55, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = "#3b2715";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(13, -22);
+        ctx.lineTo(17, -34);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(-14, -16);
+        ctx.lineTo(-21, -10);
+        ctx.stroke();
+
+        ctx.strokeStyle = "#8a6a3a";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(2, -24 + sw);
+        ctx.lineTo(17, -38 + sw);
+        ctx.stroke();
+        ctx.fillStyle = "#d8dee4";
+        ctx.beginPath();
+        ctx.moveTo(17, -38 + sw);
+        ctx.lineTo(22, -43 + sw);
+        ctx.lineTo(15, -41 + sw);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = body;
+        ctx.fillRect(-4, -33, 10, 14);
+        ctx.fillStyle = dark;
+        ctx.fillRect(-4, -26, 10, 2.4);
+
+        ctx.fillStyle = "#f0d2ae";
+        ctx.beginPath();
+        ctx.arc(1.5, -36, 3.8, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = dark;
+        ctx.beginPath();
+        ctx.arc(1.5, -38, 5.4, Math.PI, Math.PI * 2);
+        ctx.fill();
+        ctx.fillRect(-4, -39, 11, 2);
+        ctx.beginPath();
+        ctx.moveTo(1.5, -43);
+        ctx.lineTo(-2, -48);
+        ctx.lineTo(5, -48);
+        ctx.closePath();
+        ctx.fill();
+    }
+
+    function drawUnit(u) {
+        const y = GROUND - u.lane;
+        const body = (u.side === "toyotomi") ? "#d4a12a" : "#3b5aa0";
+        const dark = (u.side === "toyotomi") ? "#8a6414" : "#22386a";
+        const bob = Math.sin(u.step) * 1.2;
+        const sw = (u.swing > 0) ? 7 : 0;
+
+        const sc = 1 - u.lane * 0.0075;
+
+        ctx.save();
+        ctx.translate(u.x, y + bob);
+        ctx.scale(u.dir * sc, sc);
+
+        if (u.type === 0) {
+            drawAshigaru(body, dark, sw);
+        } else if (u.type === 1) {
+            drawTeppou(body, dark, u.swing > 5);
+        } else {
+            drawKiba(body, dark, sw, u.step);
+        }
+
+        ctx.restore();
+
+        const ratio = u.hp / u.maxHp;
+        if (ratio < 1) {
+            const top = ((u.type === 2) ? 52 : 32) * sc;
+            ctx.fillStyle = "rgba(20,15,10,0.55)";
+            ctx.fillRect(u.x - 10, y + bob - top, 20, 3);
+            ctx.fillStyle = (u.side === "toyotomi") ? "#ffd77a" : "#8fb4ff";
+            ctx.fillRect(u.x - 10, y + bob - top, 20 * ratio, 3);
+        }
+    }
+
+    function drawShots() {
+        for (let i = 0; i < shots.length; i++) {
+            const s = shots[i];
+            const a = s.life / 12;
+            ctx.strokeStyle = "rgba(255, 245, 210, " + (a * 0.8) + ")";
+            ctx.lineWidth = 1.6;
+            ctx.beginPath();
+            ctx.moveTo(s.x, s.y);
+            ctx.lineTo(s.toX, s.y - 2);
+            ctx.stroke();
+        }
+    }
+
+    function drawBaseBar(x, w, hp, maxHp, color, label) {
+        const ratio = hp / maxHp;
+        ctx.fillStyle = "rgba(25, 18, 12, 0.55)";
+        ctx.fillRect(x, 14, w, 14);
+        ctx.fillStyle = color;
+        ctx.fillRect(x, 14, w * ratio, 14);
+        ctx.strokeStyle = "rgba(255,255,255,0.5)";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x + 0.5, 14.5, w - 1, 13);
+
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "bold 12px system-ui, sans-serif";
+        ctx.textAlign = "left";
+        ctx.fillText(label, x + 4, 40);
+    }
+
+    function draw() {
+        drawSky();
+        drawCastle("toyotomi");
+        drawCastle("tokugawa");
+
+        const sorted = units.slice();
+        sorted.sort(function (a, b) { return b.lane - a.lane; });
+        for (let i = 0; i < sorted.length; i++) {
+            drawUnit(sorted[i]);
+        }
+
+        drawShots();
+
+        drawBaseBar(20, 260, toyoHp, TOYO_MAX, "#d4a12a", "豊臣");
+        drawBaseBar(360, 260, tokuHp, TOKU_MAX, "#3b5aa0", "徳川");
+
+        if (state !== "play") {
+            ctx.fillStyle = "rgba(20, 14, 8, 0.6)";
+            ctx.fillRect(0, 0, W, H);
+            ctx.fillStyle = "#ffffff";
+            ctx.textAlign = "center";
+            ctx.font = "bold 36px system-ui, sans-serif";
+            if (state === "win") {
+                ctx.fillText("豊臣の かち！", W / 2, H / 2);
+            } else {
+                ctx.fillText("徳川の かち…", W / 2, H / 2);
+            }
+            ctx.font = "18px system-ui, sans-serif";
+            ctx.fillText("「はじめから」で もういちど", W / 2, H / 2 + 34);
+        }
+
+        ctx.textAlign = "left";
+    }
+
+    let troopHtml = "";
+    for (let i = 0; i < UNITS.length; i++) {
+        troopHtml = troopHtml +
+            '<button class="troop" id="troop' + i + '">' +
+            "<b>" + UNITS[i].name + "</b>" +
+            '<span id="tnote' + i + '">' + UNITS[i].note + "</span>" +
+            "<span>軍資金 " + UNITS[i].cost + "</span>" +
+            "</button>";
+    }
+    document.getElementById("troops").innerHTML = troopHtml;
+
+    let shopHtml = "";
+    for (let i = 1; i < UNITS.length; i++) {
+        shopHtml = shopHtml +
+            '<button class="shop" id="unlock' + i + '">' +
+            "<b>" + UNITS[i].name + "を解放</b>" +
+            "<span>小判 " + UNITS[i].unlock + "</span>" +
+            "</button>";
+    }
+    shopHtml = shopHtml +
+        '<button class="shop" id="upinc">' +
+        "<b>軍資金アップ</b>" +
+        '<span id="incnote">小判 30</span>' +
+        "</button>";
+    document.getElementById("shop").innerHTML = shopHtml;
+
+    for (let i = 0; i < UNITS.length; i++) {
+        (function (k) {
+            document.getElementById("troop" + k).addEventListener("pointerdown", function (e) {
+                e.preventDefault();
+                buy(k);
+            });
+        })(i);
+    }
+
+    for (let i = 1; i < UNITS.length; i++) {
+        (function (k) {
+            document.getElementById("unlock" + k).addEventListener("pointerdown", function (e) {
+                e.preventDefault();
+                unlock(k);
+            });
+        })(i);
+    }
+
+    document.getElementById("upinc").addEventListener("pointerdown", function (e) {
+        e.preventDefault();
+        upgradeIncome();
+    });
+
+    document.getElementById("restart").addEventListener("click", function () {
+        reset();
+    });
+
+    document.addEventListener("keydown", function (e) {
+        if (e.code === "Digit1" || e.code === "Space") {
+            e.preventDefault();
+            buy(0);
+        } else if (e.code === "Digit2") {
+            e.preventDefault();
+            buy(1);
+        } else if (e.code === "Digit3") {
+            e.preventDefault();
+            buy(2);
+        }
+    });
+
+    canvas.addEventListener("pointerdown", function (e) {
+        e.preventDefault();
+        buy(0);
+    });
+
+    const moneyText = document.getElementById("money");
+    const coinsText = document.getElementById("coins");
+
+    function syncUi() {
+        moneyText.textContent = Math.floor(money);
+        coinsText.textContent = coins;
+
+        for (let i = 0; i < UNITS.length; i++) {
+            const btn = document.getElementById("troop" + i);
+            const note = document.getElementById("tnote" + i);
+            if (unlocked[i] === false) {
+                btn.className = "troop off";
+                note.textContent = "まだ解放していない";
+            } else {
+                note.textContent = UNITS[i].note;
+                if (money >= UNITS[i].cost && state === "play" && deployCool === 0) {
+                    btn.className = "troop";
+                } else {
+                    btn.className = "troop off";
+                }
+            }
+        }
+
+        for (let i = 1; i < UNITS.length; i++) {
+            const btn = document.getElementById("unlock" + i);
+            if (unlocked[i] === true) {
+                btn.className = "shop hide";
+            } else if (coins >= UNITS[i].unlock && state === "play") {
+                btn.className = "shop";
+            } else {
+                btn.className = "shop off";
+            }
+        }
+
+        const inc = document.getElementById("upinc");
+        const incNote = document.getElementById("incnote");
+        if (incomeLv >= INCOME_MAX_LV) {
+            incNote.textContent = "これいじょうは なし";
+            inc.className = "shop off";
+        } else {
+            incNote.textContent = "小判 " + incomeCost() + "（いま Lv" + incomeLv + "）";
+            if (coins >= incomeCost() && state === "play") {
+                inc.className = "shop";
+            } else {
+                inc.className = "shop off";
+            }
+        }
+    }
+
+    function loop() {
+        update();
+        draw();
+        syncUi();
+        requestAnimationFrame(loop);
+    }
+
+    requestAnimationFrame(loop);
+</script>
+</body>
+</html>
