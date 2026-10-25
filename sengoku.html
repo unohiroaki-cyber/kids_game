@@ -2,109 +2,156 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>豊臣 vs 徳川</title>
 <style>
-    body {
+    * { box-sizing: border-box; }
+    html, body {
         margin: 0;
-        padding: 14px 12px 36px;
+        height: 100%;
+        overflow: hidden;
         background-color: #231a12;
         color: #f2e7d5;
-        text-align: center;
         font-family: system-ui, sans-serif;
         user-select: none;
         -webkit-user-select: none;
         touch-action: manipulation;
+        -webkit-text-size-adjust: 100%;
     }
-    h1 {
-        font-size: 22px;
-        margin: 4px 0 12px;
-        letter-spacing: 0.06em;
+
+    .app {
+        height: 100dvh;
+        display: grid;
+        place-items: center;
     }
+
+    .stage { position: relative; line-height: 0; }
+
     canvas {
-        background-color: #bfe3f2;
-        border-radius: 10px;
-        max-width: 96vw;
+        display: block;
+        background-color: #7cc9ee;
+        width: min(100vw, calc((100dvh - env(safe-area-inset-bottom)) * 2.1333));
         height: auto;
         touch-action: none;
     }
-    .purse {
-        display: flex;
-        justify-content: center;
-        gap: 22px;
-        margin: 14px 0 4px;
-        font-size: 19px;
-        font-weight: 700;
-        font-variant-numeric: tabular-nums;
-    }
-    .purse .gold { color: #ffd77a; }
-    .purse .coin { color: #9fe0b0; }
-    .purse small { font-size: 12px; font-weight: 500; opacity: 0.75; display: block; }
 
-    .row {
+    .bar {
+        position: absolute;
+        left: 50%;
+        bottom: calc(1.5% + env(safe-area-inset-bottom));
+        transform: translateX(-50%);
         display: flex;
-        justify-content: center;
-        gap: 9px;
-        flex-wrap: wrap;
-        margin-top: 10px;
+        gap: 6px;
+        align-items: stretch;
     }
-    .troop, .shop {
-        font-family: inherit;
-        padding: 11px 9px;
+
+    .tile {
+        position: relative;
+        width: 68px;
+        height: 56px;
+        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.45);
+        padding: 0;
         border: 2px solid #6b5533;
         border-radius: 12px;
         background-color: #3a2b1a;
-        color: #f2e7d5;
+        color: #f0cf85;
         cursor: pointer;
         touch-action: none;
         -webkit-tap-highlight-color: transparent;
-        line-height: 1.45;
+        display: grid;
+        place-items: center;
     }
-    .troop { min-width: 108px; }
-    .shop {
-        min-width: 132px;
-        border-color: #3f6b48;
-        background-color: #1e3324;
+    .tile .ic { display: block; line-height: 0; margin-top: -6px; }
+    .tile .cost {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 3px;
+        font-size: 13px;
+        font-weight: 700;
+        color: #ffd77a;
+        letter-spacing: 0.02em;
     }
-    .troop b, .shop b { font-size: 16px; }
-    .troop span, .shop span { font-size: 11px; color: #c9b48c; display: block; }
-    .shop span { color: #9bc4a6; }
-    .troop:active { background-color: #5a4426; }
-    .shop:active { background-color: #2d4a34; }
-    .off { opacity: 0.38; }
-    .hide { display: none; }
+    .tile:active { background-color: #5a4426; }
 
-    .restart {
+    .tile.up { border-color: #3f6b48; background-color: #1e3324; color: #a9dfb6; }
+    .tile.up .cost { color: #9fe0b0; font-size: 12px; }
+    .tile.up:active { background-color: #2d4a34; }
+
+    .tile.locked { border-color: #3f4a3c; background-color: #20291f; color: #63745f; }
+    .tile.locked .cost { color: #8fd6a4; font-size: 11px; }
+
+    .tile.rst { width: 46px; border-color: #7b6340; color: #d8b25a; }
+    .tile.rst .ic { margin-top: 0; }
+
+    .tile.off { opacity: 0.4; }
+
+    .rotate {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background-color: #231a12;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 18px;
+        text-align: center;
+        padding: 24px;
+        z-index: 10;
+    }
+    .rotate p { margin: 0; font-size: 22px; font-weight: 700; line-height: 1.6; }
+    .rotate small { color: #b39b6d; font-size: 13px; }
+    .rotate button {
         font-family: inherit;
         font-size: 16px;
-        padding: 10px 28px;
-        margin-top: 18px;
+        padding: 12px 26px;
         border: none;
         border-radius: 10px;
         background-color: #d8b25a;
         color: #231a12;
-        cursor: pointer;
     }
-    a { color: #e7c98a; font-size: 16px; }
+    .phone {
+        width: 54px;
+        height: 92px;
+        border: 4px solid #d8b25a;
+        border-radius: 10px;
+        animation: tilt 1.8s ease-in-out infinite;
+    }
+    @keyframes tilt {
+        0%, 40% { transform: rotate(0deg); }
+        60%, 100% { transform: rotate(-90deg); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .phone { animation: none; transform: rotate(-90deg); }
+    }
+
+    @media (orientation: portrait) and (max-width: 900px) and (pointer: coarse) {
+        .app { display: none; }
+        .rotate { display: flex; }
+    }
+
+    @media (max-height: 360px) {
+        .tile { width: 58px; height: 48px; }
+        .tile.rst { width: 40px; }
+        .tile .cost { font-size: 11px; bottom: 2px; }
+    }
 </style>
 </head>
 <body>
 
-<h1>豊臣 vs 徳川</h1>
-
-<canvas id="gameCanvas" width="640" height="300"></canvas>
-
-<div class="purse">
-    <div class="gold"><span id="money">0</span><small>軍資金（時間でたまる）</small></div>
-    <div class="coin"><span id="coins">0</span><small>小判（敵を倒すと）</small></div>
+<div class="rotate" id="rotate">
+    <div class="phone"></div>
+    <p>よこむきに してね</p>
+    <button id="goFull">ぜんがめんにする</button>
+    <small>うまく回らないときは、画面の回転ロックを<br>はずしてから もういちど</small>
 </div>
 
-<div class="row" id="troops"></div>
-<div class="row" id="shop"></div>
-
-<div><button class="restart" id="restart">はじめから</button></div>
-
-<p><a href="index.html">← ゲームをえらぶ</a></p>
+<div class="app">
+    <div class="stage">
+        <canvas id="gameCanvas" width="640" height="300"></canvas>
+        <div class="bar" id="bar"></div>
+    </div>
+</div>
 
 <script>
     const canvas = document.getElementById("gameCanvas");
@@ -128,6 +175,10 @@
     const CASTLE_RATE = 30;
     const CASTLE_REACH = 52;
     const SIEGE_RANGE = 36;
+    const CANNON_RATE = 300;
+    const CANNON_ATK = 26;
+    const CANNON_REACH = 60;
+    const CANNON_MIN = 4;
 
     const DEPLOY_COOL = 30;
     const SPACING = 4;
@@ -189,6 +240,11 @@
     let tokuHp = TOKU_MAX;
     let toyoCool = 0;
     let tokuCool = 0;
+    let toyoCannon = CANNON_RATE;
+    let tokuCannon = CANNON_RATE;
+    let booms = [];
+    let balls = [];
+    let shake = 0;
     let state = "play";
     let tick = 0;
 
@@ -216,6 +272,11 @@
         tokuHp = TOKU_MAX;
         toyoCool = 0;
         tokuCool = 0;
+        toyoCannon = CANNON_RATE;
+        tokuCannon = CANNON_RATE;
+        booms = [];
+        balls = [];
+        shake = 0;
         state = "play";
         tick = 0;
     }
@@ -249,6 +310,7 @@
             rate: t.rate,
             cool: 0,
             swing: 0,
+            flash: 0,
             lane: Math.floor(Math.random() * 23),
             step: Math.random() * 6.28
         });
@@ -286,6 +348,40 @@
             coins = coins - incomeCost();
             incomeLv = incomeLv + 1;
         }
+    }
+
+    function crowdCount(side, lineX, dir) {
+        let n = 0;
+        for (let i = 0; i < units.length; i++) {
+            const d = (units[i].x - lineX) * dir;
+            if (units[i].side === side && d >= -12 && d <= CANNON_REACH) {
+                n = n + 1;
+            }
+        }
+        return n;
+    }
+
+    function fireCannon(side, lineX, dir) {
+        for (let i = 0; i < units.length; i++) {
+            const d = (units[i].x - lineX) * dir;
+            if (units[i].side === side && d >= -12 && d <= CANNON_REACH) {
+                units[i].hp = units[i].hp - CANNON_ATK;
+                units[i].flash = 16;
+            }
+        }
+    }
+
+    function launchCannon(side, lineX, dir, fromX) {
+        balls.push({
+            x0: fromX,
+            y0: GROUND - 120,
+            x1: lineX + dir * CANNON_REACH * 0.45,
+            t: 0,
+            side: side,
+            lineX: lineX,
+            dir: dir
+        });
+        booms.push({ x: fromX, y: GROUND - 120, life: 14, kind: "muzzle" });
     }
 
     function nearestTo(lineX, side, dir) {
@@ -434,6 +530,9 @@
             if (u.swing > 0) {
                 u.swing = u.swing - 1;
             }
+            if (u.flash > 0) {
+                u.flash = u.flash - 1;
+            }
 
             let canMove = true;
             let acted = false;
@@ -504,6 +603,42 @@
             }
         }
 
+        if (toyoCannon > 0) {
+            toyoCannon = toyoCannon - 1;
+        } else if (crowdCount("tokugawa", TOYO_LINE, 1) >= CANNON_MIN) {
+            toyoCannon = CANNON_RATE;
+            launchCannon("tokugawa", TOYO_LINE, 1, 44);
+        }
+
+        if (tokuCannon > 0) {
+            tokuCannon = tokuCannon - 1;
+        } else if (crowdCount("toyotomi", TOKU_LINE, -1) >= CANNON_MIN) {
+            tokuCannon = CANNON_RATE;
+            launchCannon("toyotomi", TOKU_LINE, -1, 600);
+        }
+
+        for (let i = balls.length - 1; i >= 0; i--) {
+            const b = balls[i];
+            b.t = b.t + 0.045;
+            if (b.t >= 1) {
+                fireCannon(b.side, b.lineX, b.dir);
+                booms.push({ x: b.x1, y: GROUND - 12, life: 36, kind: "impact" });
+                shake = 11;
+                balls.splice(i, 1);
+            }
+        }
+
+        if (shake > 0) {
+            shake = shake - 1;
+        }
+
+        for (let i = booms.length - 1; i >= 0; i--) {
+            booms[i].life = booms[i].life - 1;
+            if (booms[i].life <= 0) {
+                booms.splice(i, 1);
+            }
+        }
+
         for (let i = units.length - 1; i >= 0; i--) {
             if (units[i].hp <= 0) {
                 if (units[i].side === "tokugawa") {
@@ -534,7 +669,7 @@
         sky.addColorStop(0, "#9ad4ee");
         sky.addColorStop(1, "#e4f1e2");
         ctx.fillStyle = sky;
-        ctx.fillRect(0, 0, W, FIELD_FAR);
+        ctx.fillRect(-16, -16, W + 32, FIELD_FAR + 16);
 
         ctx.fillStyle = "#a8bfa0";
         for (let i = 0; i < 4; i++) {
@@ -551,7 +686,7 @@
         field.addColorStop(0.55, "#71a855");
         field.addColorStop(1, "#5d9345");
         ctx.fillStyle = field;
-        ctx.fillRect(0, FIELD_FAR, W, GROUND + 18 - FIELD_FAR);
+        ctx.fillRect(-16, FIELD_FAR, W + 32, GROUND + 18 - FIELD_FAR);
 
         ctx.strokeStyle = "rgba(60, 95, 50, 0.35)";
         ctx.lineWidth = 1;
@@ -572,7 +707,7 @@
         }
 
         ctx.fillStyle = "#6b4f33";
-        ctx.fillRect(0, GROUND + 18, W, H - GROUND - 18);
+        ctx.fillRect(-16, GROUND + 18, W + 32, H - GROUND + 16);
     }
 
     function drawKiri(cx, cy, r, color) {
@@ -1006,6 +1141,13 @@
 
         ctx.restore();
 
+        if (u.flash > 0) {
+            ctx.fillStyle = "rgba(255, 255, 255, " + (u.flash / 16) * 0.75 + ")";
+            ctx.beginPath();
+            ctx.arc(u.x, y + bob - 16 * sc, 15 * sc, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
         const ratio = u.hp / u.maxHp;
         if (ratio < 1) {
             const top = ((u.type === 2) ? 52 : 32) * sc;
@@ -1029,6 +1171,105 @@
         }
     }
 
+    function drawBalls() {
+        for (let i = 0; i < balls.length; i++) {
+            const b = balls[i];
+            for (let k = 5; k >= 1; k--) {
+                const tt = Math.max(0, b.t - k * 0.055);
+                const sx = b.x0 + (b.x1 - b.x0) * tt;
+                const sy = b.y0 + (GROUND - 12 - b.y0) * tt - Math.sin(Math.PI * tt) * 58;
+                ctx.fillStyle = "rgba(236, 232, 222, " + (0.34 - k * 0.05) + ")";
+                ctx.beginPath();
+                ctx.arc(sx, sy, 3 + k * 1.9, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            const x = b.x0 + (b.x1 - b.x0) * b.t;
+            const y = b.y0 + (GROUND - 12 - b.y0) * b.t - Math.sin(Math.PI * b.t) * 58;
+            ctx.fillStyle = "#23201c";
+            ctx.beginPath();
+            ctx.arc(x, y, 5.5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = "rgba(255,255,255,0.45)";
+            ctx.beginPath();
+            ctx.arc(x - 1.8, y - 1.8, 1.9, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+
+    function drawBooms() {
+        for (let i = 0; i < booms.length; i++) {
+            const b = booms[i];
+
+            if (b.kind === "muzzle") {
+                const t = 1 - b.life / 14;
+                ctx.fillStyle = "rgba(255, 226, 140, " + (1 - t) * 0.9 + ")";
+                ctx.beginPath();
+                ctx.arc(b.x, b.y, 6 + t * 13, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = "rgba(240, 236, 228, " + (1 - t) * 0.5 + ")";
+                ctx.beginPath();
+                ctx.arc(b.x, b.y - t * 10, 8 + t * 16, 0, Math.PI * 2);
+                ctx.fill();
+                continue;
+            }
+
+            const t = 1 - b.life / 36;
+
+            ctx.fillStyle = "rgba(255, 248, 215, " + Math.max(0, 0.85 - t * 3.2) + ")";
+            ctx.beginPath();
+            ctx.arc(b.x, b.y, 34 - t * 10, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.strokeStyle = "rgba(255, 214, 120, " + (1 - t) * 0.85 + ")";
+            ctx.lineWidth = 5 * (1 - t) + 1;
+            ctx.beginPath();
+            ctx.arc(b.x, b.y, 14 + t * CANNON_REACH, 0, Math.PI * 2);
+            ctx.stroke();
+
+            for (let k = 0; k < 7; k++) {
+                const a = -Math.PI + (k / 6) * Math.PI;
+                const dd = t * 56;
+                ctx.fillStyle = "rgba(118, 88, 56, " + (1 - t) * 0.75 + ")";
+                ctx.beginPath();
+                ctx.arc(b.x + Math.cos(a) * dd, b.y + Math.sin(a) * dd * 0.85, 7 * (1 - t) + 2, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            for (let k = 0; k < 5; k++) {
+                ctx.fillStyle = "rgba(225, 220, 210, " + (1 - t) * 0.55 + ")";
+                ctx.beginPath();
+                ctx.arc(b.x - 36 + k * 18, b.y - 24 - t * 30 - k * 3, 9 + t * 13, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            if (b.life > 10) {
+                ctx.fillStyle = "rgba(255, 70, 40, " + Math.min(1, b.life / 16) + ")";
+                ctx.font = "bold 26px system-ui, sans-serif";
+                ctx.textAlign = "center";
+                ctx.fillText("大筒！", b.x, b.y - 54 - (36 - b.life) * 0.7);
+            }
+        }
+    }
+
+    function drawPurse() {
+        ctx.fillStyle = "rgba(255, 252, 240, 0.78)";
+        ctx.beginPath();
+        if (ctx.roundRect) {
+            ctx.roundRect(246, 12, 148, 38, 9);
+        } else {
+            ctx.rect(246, 12, 148, 38);
+        }
+        ctx.fill();
+
+        ctx.textAlign = "center";
+        ctx.font = "bold 15px system-ui, sans-serif";
+        ctx.fillStyle = "#8a6414";
+        ctx.fillText("軍資金 " + Math.floor(money), 320, 27);
+        ctx.fillStyle = "#1d6b3f";
+        ctx.fillText("小判 " + coins, 320, 44);
+        ctx.textAlign = "left";
+    }
+
     function drawBaseBar(x, w, hp, maxHp, color, label) {
         const ratio = hp / maxHp;
         ctx.fillStyle = "rgba(25, 18, 12, 0.55)";
@@ -1046,6 +1287,11 @@
     }
 
     function draw() {
+        ctx.save();
+        if (shake > 0) {
+            ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake * 0.6);
+        }
+
         drawSky();
         drawCastle("toyotomi");
         drawCastle("tokugawa");
@@ -1057,9 +1303,12 @@
         }
 
         drawShots();
+        drawBalls();
+        drawBooms();
 
-        drawBaseBar(20, 260, toyoHp, TOYO_MAX, "#d4a12a", "豊臣");
-        drawBaseBar(360, 260, tokuHp, TOKU_MAX, "#3b5aa0", "徳川");
+        drawBaseBar(14, 222, toyoHp, TOYO_MAX, "#d4a12a", "豊臣");
+        drawBaseBar(404, 222, tokuHp, TOKU_MAX, "#3b5aa0", "徳川");
+        drawPurse();
 
         if (state !== "play") {
             ctx.fillStyle = "rgba(20, 14, 8, 0.6)";
@@ -1076,59 +1325,84 @@
             ctx.fillText("「はじめから」で もういちど", W / 2, H / 2 + 34);
         }
 
+        ctx.restore();
         ctx.textAlign = "left";
     }
 
-    let troopHtml = "";
-    for (let i = 0; i < UNITS.length; i++) {
-        troopHtml = troopHtml +
-            '<button class="troop" id="troop' + i + '">' +
-            "<b>" + UNITS[i].name + "</b>" +
-            '<span id="tnote' + i + '">' + UNITS[i].note + "</span>" +
-            "<span>軍資金 " + UNITS[i].cost + "</span>" +
-            "</button>";
-    }
-    document.getElementById("troops").innerHTML = troopHtml;
+    const ICONS = [
+        `<svg viewBox="0 0 34 30" width="30" height="27" fill="none">
+           <path d="M5 8 L12.5 2 L20 8 Z" fill="currentColor"/>
+           <rect x="9" y="9" width="7.5" height="11" rx="1.6" fill="currentColor"/>
+           <path d="M10.5 20 L8.5 27 M15.5 20 L17.5 27" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
+           <path d="M18 24 L28 5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+           <path d="M28 5 L32 0.5 L26.5 2 Z" fill="currentColor"/>
+         </svg>`,
+        `<svg viewBox="0 0 34 30" width="30" height="27" fill="none">
+           <path d="M5 8.5 H20" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/>
+           <rect x="9" y="10" width="7.5" height="11" rx="1.6" fill="currentColor"/>
+           <path d="M10.5 21 L8.5 27 M15.5 21 L17.5 27" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
+           <path d="M7 16 L31 11.5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>
+           <circle cx="31.5" cy="11.3" r="2.2" fill="currentColor"/>
+         </svg>`,
+        `<svg viewBox="0 0 38 30" width="34" height="27" fill="none">
+           <ellipse cx="16" cy="17" rx="12" ry="6" fill="currentColor"/>
+           <path d="M25 14 L32 5 L36 8.5 L28 17 Z" fill="currentColor"/>
+           <path d="M6 21 L4 28 M12 22 L11 28 M20 22 L21 28 M26 21 L28 28" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+           <rect x="12" y="3.5" width="7" height="9" rx="1.5" fill="currentColor"/>
+           <path d="M9 4 L15.5 0 L22 4 Z" fill="currentColor"/>
+         </svg>`
+    ];
 
-    let shopHtml = "";
-    for (let i = 1; i < UNITS.length; i++) {
-        shopHtml = shopHtml +
-            '<button class="shop" id="unlock' + i + '">' +
-            "<b>" + UNITS[i].name + "を解放</b>" +
-            "<span>小判 " + UNITS[i].unlock + "</span>" +
+    const INCOME_ICON = `<svg viewBox="0 0 32 30" width="28" height="27" fill="none">
+           <ellipse cx="16" cy="21" rx="12" ry="6" fill="currentColor"/>
+           <ellipse cx="16" cy="21" rx="5.5" ry="2.4" fill="#20291f"/>
+           <path d="M16 14 L16 2.5 M11 7.5 L16 2.5 L21 7.5" stroke="currentColor" stroke-width="2.6"
+                 stroke-linecap="round" stroke-linejoin="round"/>
+         </svg>`;
+
+    const RESTART_ICON = `<svg viewBox="0 0 28 28" width="24" height="24" fill="none">
+           <path d="M23 14 A9 9 0 1 1 20 7.2" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+           <path d="M14 2 L21.5 7.5 L13.5 10" fill="currentColor"/>
+         </svg>`;
+
+    let barHtml = "";
+    for (let i = 0; i < UNITS.length; i++) {
+        barHtml = barHtml +
+            '<button class="tile" id="t' + i + '" aria-label="' + UNITS[i].name + '">' +
+            '<span class="ic">' + ICONS[i] + "</span>" +
+            '<span class="cost" id="c' + i + '">' + UNITS[i].cost + "</span>" +
             "</button>";
     }
-    shopHtml = shopHtml +
-        '<button class="shop" id="upinc">' +
-        "<b>軍資金アップ</b>" +
-        '<span id="incnote">小判 30</span>' +
+    barHtml = barHtml +
+        '<button class="tile up" id="tup" aria-label="軍資金アップ">' +
+        '<span class="ic">' + INCOME_ICON + "</span>" +
+        '<span class="cost" id="cup">30</span>' +
+        "</button>" +
+        '<button class="tile rst" id="trst" aria-label="やりなおし">' +
+        '<span class="ic">' + RESTART_ICON + "</span>" +
         "</button>";
-    document.getElementById("shop").innerHTML = shopHtml;
+    document.getElementById("bar").innerHTML = barHtml;
 
     for (let i = 0; i < UNITS.length; i++) {
         (function (k) {
-            document.getElementById("troop" + k).addEventListener("pointerdown", function (e) {
+            document.getElementById("t" + k).addEventListener("pointerdown", function (e) {
                 e.preventDefault();
-                buy(k);
+                if (unlocked[k] === true) {
+                    buy(k);
+                } else {
+                    unlock(k);
+                }
             });
         })(i);
     }
 
-    for (let i = 1; i < UNITS.length; i++) {
-        (function (k) {
-            document.getElementById("unlock" + k).addEventListener("pointerdown", function (e) {
-                e.preventDefault();
-                unlock(k);
-            });
-        })(i);
-    }
-
-    document.getElementById("upinc").addEventListener("pointerdown", function (e) {
+    document.getElementById("tup").addEventListener("pointerdown", function (e) {
         e.preventDefault();
         upgradeIncome();
     });
 
-    document.getElementById("restart").addEventListener("click", function () {
+    document.getElementById("trst").addEventListener("pointerdown", function (e) {
+        e.preventDefault();
         reset();
     });
 
@@ -1150,52 +1424,39 @@
         buy(0);
     });
 
-    const moneyText = document.getElementById("money");
-    const coinsText = document.getElementById("coins");
+    document.getElementById("goFull").addEventListener("click", function () {
+        const el = document.documentElement;
+        if (el.requestFullscreen) {
+            el.requestFullscreen().then(function () {
+                if (screen.orientation && screen.orientation.lock) {
+                    screen.orientation.lock("landscape").catch(function () {});
+                }
+            }).catch(function () {});
+        }
+    });
 
     function syncUi() {
-        moneyText.textContent = Math.floor(money);
-        coinsText.textContent = coins;
-
         for (let i = 0; i < UNITS.length; i++) {
-            const btn = document.getElementById("troop" + i);
-            const note = document.getElementById("tnote" + i);
+            const btn = document.getElementById("t" + i);
+            const cost = document.getElementById("c" + i);
             if (unlocked[i] === false) {
-                btn.className = "troop off";
-                note.textContent = "まだ解放していない";
+                cost.textContent = "小判" + UNITS[i].unlock;
+                btn.className = (coins >= UNITS[i].unlock && state === "play") ? "tile locked" : "tile locked off";
             } else {
-                note.textContent = UNITS[i].note;
-                if (money >= UNITS[i].cost && state === "play" && deployCool === 0) {
-                    btn.className = "troop";
-                } else {
-                    btn.className = "troop off";
-                }
+                cost.textContent = UNITS[i].cost;
+                const ok = money >= UNITS[i].cost && state === "play" && deployCool === 0;
+                btn.className = ok ? "tile" : "tile off";
             }
         }
 
-        for (let i = 1; i < UNITS.length; i++) {
-            const btn = document.getElementById("unlock" + i);
-            if (unlocked[i] === true) {
-                btn.className = "shop hide";
-            } else if (coins >= UNITS[i].unlock && state === "play") {
-                btn.className = "shop";
-            } else {
-                btn.className = "shop off";
-            }
-        }
-
-        const inc = document.getElementById("upinc");
-        const incNote = document.getElementById("incnote");
+        const up = document.getElementById("tup");
+        const cup = document.getElementById("cup");
         if (incomeLv >= INCOME_MAX_LV) {
-            incNote.textContent = "これいじょうは なし";
-            inc.className = "shop off";
+            cup.textContent = "MAX";
+            up.className = "tile up off";
         } else {
-            incNote.textContent = "小判 " + incomeCost() + "（いま Lv" + incomeLv + "）";
-            if (coins >= incomeCost() && state === "play") {
-                inc.className = "shop";
-            } else {
-                inc.className = "shop off";
-            }
+            cup.textContent = "小判" + incomeCost();
+            up.className = (coins >= incomeCost() && state === "play") ? "tile up" : "tile up off";
         }
     }
 
